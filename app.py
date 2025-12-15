@@ -24,12 +24,11 @@ def get_local_time():
     return datetime.now(TIMEZONE)
 
 def to_local_time(dt):
-    """Convert UTC datetime to local timezone"""
+    """Return datetime as-is (already stored in local time)"""
     if dt is None:
         return None
-    if dt.tzinfo is None:
-        dt = pytz.UTC.localize(dt)
-    return dt.astimezone(TIMEZONE)
+    # Times are stored in local timezone already, just return as-is
+    return dt
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -90,10 +89,10 @@ class BreakRecord(db.Model):
     
     def get_elapsed_minutes(self):
         if self.start_time:
+            # Both times are in local timezone
             now = get_local_time().replace(tzinfo=None)
-            start = self.start_time
-            elapsed = now - start
-            return int(elapsed.total_seconds() / 60)
+            elapsed = now - self.start_time
+            return max(0, int(elapsed.total_seconds() / 60))
         return 0
     
     def get_break_info(self):
