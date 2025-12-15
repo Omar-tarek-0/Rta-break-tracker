@@ -1,0 +1,495 @@
+/**
+ * RTA Break Tracker - Web Application JavaScript
+ */
+
+// ==================== AGENT VIEW ====================
+
+let selectedBreakType = null;
+let selectedFile = null;
+
+// Initialize agent view
+if (document.getElementById('breakTypes')) {
+    initAgentView();
+}
+
+function initAgentView() {
+    // Break type selection
+    document.querySelectorAll('.break-type-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (this.classList.contains('disabled')) return;
+            
+            // Clear previous selection
+            document.querySelectorAll('.break-type-btn').forEach(b => b.classList.remove('selected'));
+            
+            // Select this one
+            this.classList.add('selected');
+            selectedBreakType = this.dataset.type;
+            
+            updateSubmitButton();
+        });
+    });
+    
+    // File input
+    const fileInput = document.getElementById('fileInput');
+    fileInput.addEventListener('change', function(e) {
+        if (e.target.files.length > 0) {
+            handleFileSelect(e.target.files[0]);
+        }
+    });
+    
+    // Paste button
+    document.getElementById('pasteBtn').addEventListener('click', async function() {
+        try {
+            const items = await navigator.clipboard.read();
+            for (const item of items) {
+                for (const type of item.types) {
+                    if (type.startsWith('image/')) {
+                        const blob = await item.getType(type);
+                        const file = new File([blob], 'clipboard.png', { type: type });
+                        handleFileSelect(file);
+                        return;
+                    }
+                }
+            }
+            showMessage('No image found in clipboard', true);
+        } catch (err) {
+            showMessage('Failed to paste: ' + err.message, true);
+        }
+    });
+    
+    // Keyboard paste (Ctrl+V)
+    document.addEventListener('paste', function(e) {
+        const items = e.clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const blob = items[i].getAsFile();
+                handleFileSelect(blob);
+                e.preventDefault();
+                return;
+            }
+        }
+    });
+    
+    // Drag and drop
+    const uploadArea = document.getElementById('uploadArea');
+    uploadArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('dragover');
+    });
+    
+    uploadArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+    });
+    
+    uploadArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+        
+        if (e.dataTransfer.files.length > 0) {
+            handleFileSelect(e.dataTransfer.files[0]);
+        }
+    });
+    
+    // Submit button
+    document.getElementById('submitBtn').addEventListener('click', submitBreak);
+    
+    // Update elapsed time every minute
+    if (window.agentData && window.agentData.hasActiveBreak) {
+        updateElapsedTime();
+        setInterval(updateElapsedTime, 60000);
+    }
+}
+
+function handleFileSelect(file) {
+    if (!file.type.startsWith('image/')) {
+        showMessage('Please select an image file', true);
+        return;
+    }
+    
+    selectedFile = file;
+    document.getElementById('uploadIcon').textContent = '✅';
+    document.getElementById('uploadArea').classList.add('has-file');
+    document.getElementById('selectedFile').textContent = '✅ ' + (file.name || 'Pasted from clipboard');
+    
+    updateSubmitButton();
+}
+
+function updateSubmitButton() {
+    const btn = document.getElementById('submitBtn');
+    const hasActiveBreak = window.agentData && window.agentData.hasActiveBreak;
+    
+    if (hasActiveBreak) {
+        // End break mode
+        btn.disabled = !selectedFile;
+        btn.textContent = '🏁 Submit Break End';
+    } else {
+        // Start break mode
+        btn.disabled = !selectedFile || !selectedBreakType;
+        btn.textContent = '🚀 Submit Break Start';
+    }
+}
+
+async function submitBreak() {
+    const btn = document.getElementById('submitBtn');
+    const hasActiveBreak = window.agentData && window.agentData.hasActiveBreak;
+    
+    if (!selectedFile) {
+        showMessage('Please select a screenshot', true);
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+    
+    const formData = new FormData();
+    formData.append('screenshot', selectedFile);
+    
+    let url, successMessage;
+    
+    if (hasActiveBreak) {
+        url = '/api/break/end';
+    } else {
+        if (!selectedBreakType) {
+            showMessage('Please select a break type', true);
+            btn.disabled = false;
+            updateSubmitButton();
+            return;
+        }
+        url = '/api/break/start';
+        formData.append('break_type', selectedBreakType);
+    }
+    
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showMessage(data.message, false);
+            // Reload page after short delay
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showMessage(data.error || 'An error occurred', true);
+            updateSubmitButton();
+        }
+    } catch (err) {
+        showMessage('Network error: ' + err.message, true);
+        updateSubmitButton();
+    }
+}
+
+function updateElapsedTime() {
+    if (!window.agentData || !window.agentData.activeBreakStart) return;
+    
+    const start = new Date(window.agentData.activeBreakStart);
+    const now = new Date();
+    const elapsed = Math.floor((now - start) / 60000);
+    
+    const elapsedSpan = document.getElementById('elapsedTime');
+    if (elapsedSpan) {
+        elapsedSpan.textContent = elapsed;
+    }
+}
+
+function showMessage(text, isError) {
+    const msg = document.getElementById('message');
+    msg.textContent = text;
+    msg.className = 'message ' + (isError ? 'error' : 'success');
+    
+    setTimeout(() => {
+        msg.textContent = '';
+        msg.className = 'message';
+    }, 5000);
+}
+
+
+// ==================== DASHBOARD ====================
+
+if (document.getElementById('breaksContainer')) {
+    initDashboard();
+}
+
+function initDashboard() {
+    // Load breaks on page load
+    loadBreaks();
+    
+    // Date filter buttons
+    document.querySelectorAll('[data-date]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const mode = this.dataset.date;
+            setDateFilter(mode);
+        });
+    });
+    
+    // Custom date
+    document.getElementById('goDateBtn').addEventListener('click', function() {
+        const customDate = document.getElementById('customDate').value;
+        if (customDate) {
+            window.dashboardData.startDate = customDate;
+            window.dashboardData.endDate = customDate;
+            updateDateLabel('Custom (' + customDate + ')');
+            loadBreaks();
+        }
+    });
+    
+    // Agent filter
+    document.getElementById('agentFilter').addEventListener('change', loadBreaks);
+    
+    // Type filter
+    document.getElementById('typeFilter').addEventListener('change', loadBreaks);
+    
+    // Search
+    document.getElementById('searchInput').addEventListener('input', function() {
+        filterDisplayedBreaks(this.value.toLowerCase());
+    });
+    
+    // Auto refresh every 30 seconds
+    setInterval(loadBreaks, 30000);
+}
+
+function setDateFilter(mode) {
+    const today = new Date();
+    let startDate, endDate, label;
+    
+    // Update button styles
+    document.querySelectorAll('[data-date]').forEach(btn => {
+        btn.classList.remove('btn-primary');
+        if (btn.dataset.date === mode) {
+            btn.classList.add('btn-primary');
+        }
+    });
+    
+    if (mode === 'today') {
+        startDate = endDate = formatDate(today);
+        label = 'Today';
+    } else if (mode === 'yesterday') {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        startDate = endDate = formatDate(yesterday);
+        label = 'Yesterday';
+    } else if (mode === 'week') {
+        const weekAgo = new Date(today);
+        weekAgo.setDate(weekAgo.getDate() - 6);
+        startDate = formatDate(weekAgo);
+        endDate = formatDate(today);
+        label = 'Last 7 days';
+    }
+    
+    window.dashboardData.startDate = startDate;
+    window.dashboardData.endDate = endDate;
+    updateDateLabel(label);
+    loadBreaks();
+}
+
+function formatDate(date) {
+    return date.toISOString().split('T')[0];
+}
+
+function updateDateLabel(label) {
+    document.getElementById('currentDateLabel').textContent = '📆 Showing: ' + label;
+}
+
+async function loadBreaks() {
+    const container = document.getElementById('breaksContainer');
+    container.innerHTML = '<div class="loading">Loading breaks...</div>';
+    
+    const agentId = document.getElementById('agentFilter').value;
+    const breakType = document.getElementById('typeFilter').value;
+    
+    const params = new URLSearchParams({
+        start_date: window.dashboardData.startDate,
+        end_date: window.dashboardData.endDate
+    });
+    
+    if (agentId) params.append('agent_id', agentId);
+    if (breakType) params.append('break_type', breakType);
+    
+    try {
+        const response = await fetch('/api/breaks?' + params.toString());
+        const data = await response.json();
+        
+        document.getElementById('recordsCount').textContent = 
+            `Showing ${data.total_breaks} breaks from ${data.agents.length} agents`;
+        
+        if (data.agents.length === 0) {
+            container.innerHTML = '<div class="empty-message">📭 No break records found</div>';
+            return;
+        }
+        
+        container.innerHTML = '';
+        
+        data.agents.forEach(agent => {
+            const agentCard = createAgentCard(agent);
+            container.appendChild(agentCard);
+        });
+        
+    } catch (err) {
+        container.innerHTML = '<div class="error-message">Failed to load breaks: ' + err.message + '</div>';
+    }
+}
+
+function createAgentCard(agent) {
+    const card = document.createElement('div');
+    card.className = 'agent-card';
+    card.dataset.agentName = agent.agent_name.toLowerCase();
+    
+    card.innerHTML = `
+        <div class="agent-card-header">
+            <span class="agent-name">👤 ${agent.agent_name}</span>
+            <span class="break-count">📋 ${agent.breaks.length} break(s)</span>
+        </div>
+        <div class="agent-breaks">
+            ${agent.breaks.map(br => createBreakMiniCard(br)).join('')}
+        </div>
+    `;
+    
+    return card;
+}
+
+function createBreakMiniCard(br) {
+    let statusClass = 'completed';
+    let statusText = `✅ ${br.duration_minutes}m`;
+    
+    if (br.is_active) {
+        statusClass = 'active';
+        statusText = `⏳ ${br.elapsed_minutes}m`;
+    } else if (br.is_overdue) {
+        statusClass = 'overdue';
+        statusText = `⚠️ ${br.duration_minutes}m`;
+    }
+    
+    const startTime = new Date(br.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const endTime = br.end_time 
+        ? new Date(br.end_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        : '...';
+    
+    return `
+        <div class="break-mini-card ${statusClass}">
+            <div class="break-mini-header">
+                <span class="break-mini-type">${br.break_emoji} ${br.break_name}</span>
+                <span class="break-mini-status ${statusClass}">${statusText}</span>
+            </div>
+            <div class="break-mini-time">🕐 ${startTime} → ${endTime}</div>
+            <div class="break-screenshots">
+                <div class="screenshot-box">
+                    <div class="screenshot-label">Start</div>
+                    ${br.start_screenshot 
+                        ? `<img src="/uploads/${br.start_screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${br.start_screenshot}', 'Start Screenshot')">`
+                        : '<div class="screenshot-empty">—</div>'
+                    }
+                </div>
+                <div class="screenshot-box">
+                    <div class="screenshot-label">End</div>
+                    ${br.end_screenshot 
+                        ? `<img src="/uploads/${br.end_screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${br.end_screenshot}', 'End Screenshot')">`
+                        : '<div class="screenshot-empty">—</div>'
+                    }
+                </div>
+            </div>
+            <div class="break-notes">
+                <input type="text" placeholder="Notes..." value="${br.notes}" onchange="saveNotes(${br.id}, this.value)">
+                <button class="btn btn-sm btn-primary" onclick="saveNotes(${br.id}, this.previousElementSibling.value)">💾</button>
+            </div>
+        </div>
+    `;
+}
+
+function filterDisplayedBreaks(query) {
+    document.querySelectorAll('.agent-card').forEach(card => {
+        const name = card.dataset.agentName;
+        card.style.display = name.includes(query) ? 'block' : 'none';
+    });
+}
+
+async function saveNotes(breakId, notes) {
+    try {
+        const response = await fetch(`/api/break/${breakId}/notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notes: notes })
+        });
+        
+        const data = await response.json();
+        if (!data.success) {
+            alert('Failed to save notes');
+        }
+    } catch (err) {
+        alert('Error saving notes: ' + err.message);
+    }
+}
+
+// ==================== MODALS ====================
+
+function showAddAgentModal() {
+    document.getElementById('addAgentModal').style.display = 'flex';
+    document.getElementById('agentName').value = '';
+    document.getElementById('agentUsername').value = '';
+    document.getElementById('agentPassword').value = '';
+    document.getElementById('agentError').textContent = '';
+}
+
+function hideAddAgentModal() {
+    document.getElementById('addAgentModal').style.display = 'none';
+}
+
+async function createAgent() {
+    const name = document.getElementById('agentName').value.trim();
+    const username = document.getElementById('agentUsername').value.trim();
+    const password = document.getElementById('agentPassword').value;
+    
+    if (!name || !username || !password) {
+        document.getElementById('agentError').textContent = '⚠️ All fields are required';
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/agent/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ full_name: name, username: username, password: password })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            hideAddAgentModal();
+            location.reload();
+        } else {
+            document.getElementById('agentError').textContent = '⚠️ ' + data.error;
+        }
+    } catch (err) {
+        document.getElementById('agentError').textContent = '⚠️ Network error';
+    }
+}
+
+function showImage(src, title) {
+    document.getElementById('modalImage').src = src;
+    document.getElementById('imageModalTitle').textContent = title;
+    document.getElementById('imageModal').style.display = 'flex';
+}
+
+function hideImageModal() {
+    document.getElementById('imageModal').style.display = 'none';
+}
+
+// Close modals on escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        hideAddAgentModal();
+        hideImageModal();
+    }
+});
+
+// Close modals on background click
+document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.style.display = 'none';
+        }
+    });
+});
+

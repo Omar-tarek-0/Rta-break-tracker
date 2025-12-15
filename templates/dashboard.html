@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}RTM Dashboard - RTA Break Tracker{% endblock %}
+
+{% block content %}
+<div class="app-container">
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <h1>🖥️ RTA Break Tracker</h1>
+            <span class="badge badge-primary">RTM</span>
+            <span class="header-date">📅 {{ now().strftime('%A, %B %d, %Y') if now else '' }}</span>
+        </div>
+        <div class="header-right">
+            <span class="user-info">👤 {{ user.full_name }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">🚪 Logout</a>
+        </div>
+    </header>
+    
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+        <div class="stat-card">
+            <div class="stat-value" style="color: #1a73e8;">{{ total_agents }}</div>
+            <div class="stat-label">👥 Agents</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ total_breaks_today }}</div>
+            <div class="stat-label">📋 Breaks Today</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" style="color: #fbbc04;">{{ active_breaks }}</div>
+            <div class="stat-label">⏳ On Break</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" style="color: #ea4335;">{{ overdue_breaks }}</div>
+            <div class="stat-label">⚠️ Overdue</div>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="dashboard-content">
+        <!-- Sidebar: Filters -->
+        <aside class="sidebar">
+            <div class="filter-section">
+                <h4>🔍 Search</h4>
+                <input type="text" id="searchInput" placeholder="Search agents..." class="form-input">
+            </div>
+            
+            <div class="filter-section">
+                <h4>📅 Date Range</h4>
+                <div class="date-buttons">
+                    <button class="btn btn-sm btn-primary" data-date="today">Today</button>
+                    <button class="btn btn-sm" data-date="yesterday">Yesterday</button>
+                    <button class="btn btn-sm" data-date="week">7 Days</button>
+                </div>
+                <div class="custom-date">
+                    <input type="date" id="customDate" class="form-input">
+                    <button class="btn btn-sm btn-primary" id="goDateBtn">Go</button>
+                </div>
+                <p class="current-filter" id="currentDateLabel">📆 Showing: Today</p>
+            </div>
+            
+            <div class="filter-section">
+                <h4>👤 Filter by Agent</h4>
+                <select id="agentFilter" class="form-select">
+                    <option value="">All Agents</option>
+                    {% for agent in agents %}
+                    <option value="{{ agent.id }}">{{ agent.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="filter-section">
+                <h4>☕ Filter by Type</h4>
+                <select id="typeFilter" class="form-select">
+                    <option value="">All Types</option>
+                    {% for key, info in break_types.items() %}
+                    <option value="{{ key }}">{{ info.emoji }} {{ info.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <button class="btn btn-primary btn-block" onclick="loadBreaks()">🔄 Refresh Data</button>
+            
+            <hr class="divider">
+            
+            <div class="filter-section">
+                <h4>⚙️ Agent Management</h4>
+                <button class="btn btn-success btn-block" onclick="showAddAgentModal()">➕ Add New Agent</button>
+                <p class="agent-count">Total: {{ total_agents }} agents</p>
+            </div>
+        </aside>
+        
+        <!-- Main: Break Records -->
+        <main class="main-area">
+            <div class="main-header">
+                <h2>📋 Break Records</h2>
+                <span id="recordsCount" class="records-count"></span>
+            </div>
+            
+            <div id="breaksContainer" class="breaks-container">
+                <div class="loading">Loading breaks...</div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<!-- Add Agent Modal -->
+<div id="addAgentModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>➕ Add New Agent</h3>
+            <button class="modal-close" onclick="hideAddAgentModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="agentName" class="form-input" placeholder="Enter agent's full name">
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="agentUsername" class="form-input" placeholder="Enter username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="agentPassword" class="form-input" placeholder="Enter password">
+            </div>
+            <p id="agentError" class="error-message"></p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="hideAddAgentModal()">Cancel</button>
+            <button class="btn btn-success" onclick="createAgent()">✅ Add Agent</button>
+        </div>
+    </div>
+</div>
+
+<!-- Image Viewer Modal -->
+<div id="imageModal" class="modal" style="display: none;">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3 id="imageModalTitle">Screenshot</h3>
+            <button class="modal-close" onclick="hideImageModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <img id="modalImage" src="" alt="Screenshot" class="modal-image">
+        </div>
+    </div>
+</div>
+
+<script>
+    // Initialize dashboard
+    window.dashboardData = {
+        startDate: '{{ date_filter }}',
+        endDate: '{{ date_filter }}'
+    };
+</script>
+{% endblock %}
+

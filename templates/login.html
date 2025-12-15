@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Login - RTA Break Tracker{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="login-icon">🖥️</div>
+            <h1>RTA Break Tracker</h1>
+            <p>Agent Break Management System</p>
+        </div>
+        
+        <form method="POST" class="login-form">
+            <div class="form-group">
+                <label for="username">👤 Username</label>
+                <input type="text" id="username" name="username" placeholder="Enter username" required autofocus>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">🔒 Password</label>
+                <input type="password" id="password" name="password" placeholder="Enter password" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block">
+                🔐 Login
+            </button>
+        </form>
+        
+        <div class="login-footer">
+            <p>RTA Break Tracker v1.1</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
