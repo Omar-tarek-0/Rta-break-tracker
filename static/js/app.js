@@ -247,8 +247,14 @@ function initDashboard() {
         filterDisplayedBreaks(this.value.toLowerCase());
     });
     
-    // Auto refresh every 30 seconds
-    setInterval(loadBreaks, 30000);
+    // Auto refresh every 60 seconds (only if no error)
+    setInterval(() => {
+        // Only auto-refresh if not showing an error
+        const container = document.getElementById('breaksContainer');
+        if (!container.innerHTML.includes('error-message')) {
+            loadBreaks();
+        }
+    }, 60000);
 }
 
 function setDateFilter(mode) {
@@ -310,7 +316,25 @@ async function loadBreaks() {
     
     try {
         const response = await fetch('/api/breaks?' + params.toString());
+        
+        // Handle 403 - not authorized (not logged in as RTM)
+        if (response.status === 403) {
+            container.innerHTML = '<div class="error-message">⚠️ Access denied. Please log in as RTM admin.</div>';
+            return;
+        }
+        
+        // Handle 401 - session expired
+        if (response.status === 401) {
+            window.location.href = '/login';
+            return;
+        }
+        
         const data = await response.json();
+        
+        if (data.error) {
+            container.innerHTML = `<div class="error-message">⚠️ ${data.error}</div>`;
+            return;
+        }
         
         document.getElementById('recordsCount').textContent = 
             `Showing ${data.total_breaks} breaks from ${data.agents.length} agents`;
