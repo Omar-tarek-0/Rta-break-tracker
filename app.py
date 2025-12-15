@@ -15,8 +15,21 @@ import uuid
 from config import (
     SECRET_KEY, SQLALCHEMY_DATABASE_URI, UPLOAD_FOLDER, 
     ALLOWED_EXTENSIONS, BREAK_DURATIONS, BREAK_INFO,
-    ROLE_AGENT, ROLE_RTM, DEFAULT_USERS, DEBUG, ENV
+    ROLE_AGENT, ROLE_RTM, DEFAULT_USERS, DEBUG, ENV, TIMEZONE
 )
+import pytz
+
+def get_local_time():
+    """Get current time in configured timezone"""
+    return datetime.now(TIMEZONE)
+
+def to_local_time(dt):
+    """Convert UTC datetime to local timezone"""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = pytz.UTC.localize(dt)
+    return dt.astimezone(TIMEZONE)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -77,7 +90,9 @@ class BreakRecord(db.Model):
     
     def get_elapsed_minutes(self):
         if self.start_time:
-            elapsed = datetime.now() - self.start_time
+            now = get_local_time().replace(tzinfo=None)
+            start = self.start_time
+            elapsed = now - start
             return int(elapsed.total_seconds() / 60)
         return 0
     
@@ -87,8 +102,22 @@ class BreakRecord(db.Model):
     def get_allowed_duration(self):
         return BREAK_DURATIONS.get(self.break_type, 15)
     
+    def get_local_start_time(self):
+        """Get start time in local timezone"""
+        if self.start_time:
+            return to_local_time(self.start_time)
+        return None
+    
+    def get_local_end_time(self):
+        """Get end time in local timezone"""
+        if self.end_time:
+            return to_local_time(self.end_time)
+        return None
+    
     def to_dict(self):
         info = self.get_break_info()
+        local_start = self.get_local_start_time()
+        local_end = self.get_local_end_time()
         return {
             'id': self.id,
             'agent_id': self.agent_id,
@@ -97,8 +126,8 @@ class BreakRecord(db.Model):
             'break_name': info['name'],
             'break_emoji': info['emoji'],
             'break_color': info['color'],
-            'start_time': self.start_time.isoformat() if self.start_time else None,
-            'end_time': self.end_time.isoformat() if self.end_time else None,
+            'start_time': local_start.isoformat() if local_start else None,
+            'end_time': local_end.isoformat() if local_end else None,
             'start_screenshot': self.start_screenshot,
             'end_screenshot': self.end_screenshot,
             'duration_minutes': self.duration_minutes,
@@ -129,7 +158,7 @@ def save_screenshot(file):
         filename = f"{uuid.uuid4().hex}.{ext}"
         
         # Create date-based folder
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = get_local_time().strftime("%Y-%m-%d")
         folder = Path(app.config['UPLOAD_FOLDER']) / today
         folder.mkdir(parents=True, exist_ok=True)
         
@@ -216,7 +245,7 @@ def agent_view():
     ).first()
     
     # Get today's breaks
-    today = datetime.now().date()
+    today = get_local_time().date()
     today_breaks = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
         db.func.date(BreakRecord.start_time) == today
@@ -239,7 +268,7 @@ def dashboard():
         return redirect(url_for('agent_view'))
     
     # Get filter parameters
-    date_filter = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    date_filter = request.args.get('date', get_local_time().strftime('%Y-%m-%d'))
     agent_filter = request.args.get('agent', '')
     type_filter = request.args.get('type', '')
     
@@ -247,7 +276,7 @@ def dashboard():
     agents = User.query.filter_by(role=ROLE_AGENT).order_by(User.full_name).all()
     
     # Get stats
-    today = datetime.now().date()
+    today = get_local_time().date()
     total_breaks_today = BreakRecord.query.filter(
         db.func.date(BreakRecord.start_time) == today
     ).count()
@@ -281,7 +310,7 @@ def get_breaks():
         return jsonify({'error': 'Unauthorized'}), 403
     
     # Get filter parameters
-    start_date = request.args.get('start_date', datetime.now().strftime('%Y-%m-%d'))
+    start_date = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
     end_date = request.args.get('end_date', start_date)
     agent_id = request.args.get('agent_id', '')
     break_type = request.args.get('break_type', '')
@@ -346,7 +375,7 @@ def start_break():
     break_record = BreakRecord(
         agent_id=current_user.id,
         break_type=break_type,
-        start_time=datetime.now(),
+        start_time=get_local_time().replace(tzinfo=None),
         start_screenshot=screenshot_path
     )
     db.session.add(break_record)
@@ -381,7 +410,7 @@ def end_break():
         return jsonify({'error': 'Invalid screenshot file'}), 400
     
     # Update break record
-    active.end_time = datetime.now()
+    active.end_time = get_local_time().replace(tzinfo=None)
     active.end_screenshot = screenshot_path
     active.duration_minutes = int((active.end_time - active.start_time).total_seconds() / 60)
     active.is_overdue = active.duration_minutes > active.get_allowed_duration()

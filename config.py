@@ -4,6 +4,7 @@ Supports both development and production environments
 """
 import os
 from pathlib import Path
+import pytz
 
 # Base directory
 BASE_DIR = Path(__file__).parent
@@ -11,6 +12,12 @@ BASE_DIR = Path(__file__).parent
 # Environment
 ENV = os.environ.get('FLASK_ENV', 'development')
 DEBUG = ENV == 'development'
+
+# Timezone Configuration (Change this to your timezone!)
+# Egypt: 'Africa/Cairo'
+# Saudi Arabia: 'Asia/Riyadh'
+# UAE: 'Asia/Dubai'
+TIMEZONE = pytz.timezone(os.environ.get('TIMEZONE', 'Africa/Cairo'))
 
 # Secret key (CHANGE IN PRODUCTION via environment variable!)
 SECRET_KEY = os.environ.get('SECRET_KEY', 'rta-break-tracker-dev-key-change-in-production')
