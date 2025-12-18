@@ -720,6 +720,9 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     # Count incidents (overdue breaks)
     incidents = sum(1 for b in breaks if b.is_overdue)
     
+    # Count emergency breaks
+    emergency_count = sum(1 for b in breaks if b.break_type == 'emergency')
+    
     # Count breaks by type
     break_counts = {}
     for b in breaks:
@@ -754,6 +757,7 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         'total_allowed_break_minutes': total_allowed_break_minutes,
         'exceeding_break_minutes': exceeding_break_minutes,
         'incidents': incidents,
+        'emergency_count': emergency_count,
         'total_breaks': len(breaks),
         'completed_breaks': total_completed_breaks,
         'utilization': round(utilization, 1),
@@ -782,6 +786,7 @@ def get_metrics():
         'total_break_minutes': 0,
         'exceeding_break_minutes': 0,
         'incidents': 0,
+        'emergency_count': 0,
         'total_breaks': 0,
         'utilization_sum': 0,
         'adherence_sum': 0,
@@ -803,6 +808,7 @@ def get_metrics():
         totals['total_break_minutes'] += metrics['total_break_minutes']
         totals['exceeding_break_minutes'] += metrics['exceeding_break_minutes']
         totals['incidents'] += metrics['incidents']
+        totals['emergency_count'] += metrics['emergency_count']
         totals['total_breaks'] += metrics['total_breaks']
         if metrics['shifts_count'] > 0:
             totals['utilization_sum'] += metrics['utilization']
@@ -862,7 +868,7 @@ def export_report():
     bad_fill = PatternFill(start_color="ffc7ce", end_color="ffc7ce", fill_type="solid")
     
     # Title
-    ws.merge_cells('A1:L1')
+    ws.merge_cells('A1:M1')
     ws['A1'] = f"RTA Agent Metrics Report ({start_date} to {end_date})"
     ws['A1'].font = Font(bold=True, size=14)
     ws['A1'].alignment = Alignment(horizontal="center")
@@ -877,6 +883,7 @@ def export_report():
         "Allowed Break (min)",
         "Exceeding (min)",
         "Incidents",
+        "Emergency",
         "Utilization %",
         "Adherence %",
         "Conformance %",
@@ -898,6 +905,7 @@ def export_report():
         'allowed_minutes': 0,
         'exceeding': 0,
         'incidents': 0,
+        'emergency': 0,
         'breaks': 0,
         'util_sum': 0,
         'adh_sum': 0,
@@ -928,6 +936,7 @@ def export_report():
             metrics['total_allowed_break_minutes'],
             metrics['exceeding_break_minutes'],
             metrics['incidents'],
+            metrics['emergency_count'],
             metrics['utilization'],
             metrics['adherence'],
             metrics['conformance'],
@@ -938,7 +947,7 @@ def export_report():
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = cell_alignment
             cell.border = border
-            if col == 12:  # Status column
+            if col == 13:  # Status column
                 cell.fill = status_fill
         
         # Accumulate totals
@@ -947,6 +956,7 @@ def export_report():
         total_metrics['allowed_minutes'] += metrics['total_allowed_break_minutes']
         total_metrics['exceeding'] += metrics['exceeding_break_minutes']
         total_metrics['incidents'] += metrics['incidents']
+        total_metrics['emergency'] += metrics['emergency_count']
         total_metrics['breaks'] += metrics['total_breaks']
         if metrics['shifts_count'] > 0:
             total_metrics['util_sum'] += metrics['utilization']
@@ -973,6 +983,7 @@ def export_report():
         total_metrics['allowed_minutes'],
         total_metrics['exceeding'],
         total_metrics['incidents'],
+        total_metrics['emergency'],
         avg_util,
         avg_adh,
         avg_conf,
@@ -987,7 +998,7 @@ def export_report():
         cell.fill = total_fill
     
     # Adjust column widths
-    column_widths = [20, 15, 15, 12, 15, 15, 12, 10, 12, 12, 12, 15]
+    column_widths = [20, 15, 15, 12, 15, 15, 12, 10, 10, 12, 12, 12, 15]
     for i, width in enumerate(column_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = width
     
@@ -1000,6 +1011,8 @@ def export_report():
     ws.cell(row=row, column=1, value=f"Total Agents: {len(agents)}")
     row += 1
     ws.cell(row=row, column=1, value=f"Total Incidents: {total_metrics['incidents']}")
+    row += 1
+    ws.cell(row=row, column=1, value=f"Total Emergency Breaks: {total_metrics['emergency']}")
     row += 1
     ws.cell(row=row, column=1, value=f"Total Exceeding Break Time: {total_metrics['exceeding']} minutes")
     row += 1

@@ -744,6 +744,7 @@ async function loadMetrics() {
         document.getElementById('avgConformance').textContent = data.totals.avg_conformance + '%';
         document.getElementById('totalIncidents').textContent = data.totals.incidents;
         document.getElementById('totalExceeding').textContent = data.totals.exceeding_break_minutes + ' min';
+        document.getElementById('totalEmergency').textContent = data.totals.emergency_count;
         
         // Update period label
         document.getElementById('reportPeriodLabel').textContent = `${startDate} to ${endDate}`;
@@ -778,6 +779,7 @@ async function loadMetrics() {
                 <td>${agent.total_break_minutes} min</td>
                 <td>${agent.exceeding_break_minutes} min</td>
                 <td>${agent.incidents}</td>
+                <td>${agent.emergency_count}</td>
                 <td>${agent.utilization}%</td>
                 <td>${agent.adherence}%</td>
                 <td class="${statusClass}">${statusText}</td>

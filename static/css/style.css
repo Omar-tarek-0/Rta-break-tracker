@@ -1047,6 +1047,11 @@ body {
     border-color: var(--danger);
 }
 
+.metric-card.emergency {
+    border-color: #f44336;
+    background: rgba(244, 67, 54, 0.1);
+}
+
 .metric-value {
     font-size: 24px;
     font-weight: 700;
@@ -1059,6 +1064,10 @@ body {
 
 .metric-card.danger .metric-value {
     color: var(--danger);
+}
+
+.metric-card.emergency .metric-value {
+    color: #f44336;
 }
 
 .metric-label {
