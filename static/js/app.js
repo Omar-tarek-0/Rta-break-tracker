@@ -517,3 +517,172 @@ document.querySelectorAll('.modal').forEach(modal => {
     });
 });
 
+
+// ==================== TAB NAVIGATION ====================
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const tabId = this.dataset.tab;
+        
+        // Update button states
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        
+        // Show/hide tab content
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.style.display = 'none';
+            content.classList.remove('active');
+        });
+        
+        const tabContent = document.getElementById('tab-' + tabId);
+        if (tabContent) {
+            tabContent.style.display = 'flex';
+            tabContent.classList.add('active');
+            
+            // Load data for the tab
+            if (tabId === 'shifts') {
+                loadShifts();
+            }
+        }
+    });
+});
+
+
+// ==================== SHIFT MANAGEMENT ====================
+
+let shiftsData = {};
+
+function setShiftTemplate(start, end) {
+    document.getElementById('shiftStartTime').value = start;
+    document.getElementById('shiftEndTime').value = end;
+}
+
+function selectAllAgents() {
+    document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = true);
+}
+
+function deselectAllAgents() {
+    document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false);
+}
+
+async function loadShifts() {
+    const shiftDate = document.getElementById('shiftDate').value;
+    if (!shiftDate) return;
+    
+    try {
+        const response = await fetch(`/api/shifts?start_date=${shiftDate}&end_date=${shiftDate}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            console.error('Error loading shifts:', data.error);
+            return;
+        }
+        
+        // Store shifts data
+        shiftsData = {};
+        data.shifts.forEach(shift => {
+            shiftsData[shift.agent_id] = shift;
+        });
+        
+        // Update table display
+        updateShiftsTable();
+        
+    } catch (err) {
+        console.error('Failed to load shifts:', err);
+    }
+}
+
+function updateShiftsTable() {
+    document.querySelectorAll('#shiftsTableBody tr').forEach(row => {
+        const agentId = parseInt(row.dataset.agentId);
+        const shiftDisplay = row.querySelector('.shift-display');
+        const hoursDisplay = row.querySelector('.hours-display');
+        
+        if (shiftsData[agentId]) {
+            const shift = shiftsData[agentId];
+            shiftDisplay.innerHTML = `<span class="has-shift">🕐 ${shift.start_time} - ${shift.end_time}</span>`;
+            hoursDisplay.textContent = shift.duration_hours + 'h';
+        } else {
+            shiftDisplay.innerHTML = '<span class="no-shift">No shift set</span>';
+            hoursDisplay.textContent = '-';
+        }
+    });
+}
+
+async function saveSelectedShifts() {
+    const selectedAgents = [];
+    document.querySelectorAll('.agent-checkbox:checked').forEach(cb => {
+        selectedAgents.push(parseInt(cb.value));
+    });
+    
+    if (selectedAgents.length === 0) {
+        alert('Please select at least one agent');
+        return;
+    }
+    
+    const shiftDate = document.getElementById('shiftDate').value;
+    const startTime = document.getElementById('shiftStartTime').value;
+    const endTime = document.getElementById('shiftEndTime').value;
+    
+    if (!shiftDate || !startTime || !endTime) {
+        alert('Please fill in all shift details');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/shift/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                agent_ids: selectedAgents,
+                shift_date: shiftDate,
+                start_time: startTime,
+                end_time: endTime
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(data.message);
+            deselectAllAgents();
+            loadShifts();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    }
+}
+
+async function deleteShift(agentId) {
+    const shift = shiftsData[agentId];
+    if (!shift) {
+        alert('No shift to delete for this agent on selected date');
+        return;
+    }
+    
+    if (!confirm('Delete this shift?')) return;
+    
+    try {
+        const response = await fetch(`/api/shift/${shift.id}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            loadShifts();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    }
+}
+
+// Load shifts when date changes
+if (document.getElementById('shiftDate')) {
+    document.getElementById('shiftDate').addEventListener('change', loadShifts);
+}
+

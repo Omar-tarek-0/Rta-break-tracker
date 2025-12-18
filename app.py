@@ -70,11 +70,43 @@ class User(UserMixin, db.Model):
         return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
 
+class Shift(db.Model):
+    """Shift model for tracking agent work schedules"""
+    id = db.Column(db.Integer, primary_key=True)
+    agent_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    shift_date = db.Column(db.Date, nullable=False)
+    start_time = db.Column(db.Time, nullable=False)
+    end_time = db.Column(db.Time, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'))
+    
+    agent = db.relationship('User', foreign_keys=[agent_id], backref='shifts')
+    
+    def get_duration_hours(self):
+        """Calculate shift duration in hours"""
+        start = datetime.combine(self.shift_date, self.start_time)
+        end = datetime.combine(self.shift_date, self.end_time)
+        if end < start:  # Overnight shift
+            end += timedelta(days=1)
+        return (end - start).total_seconds() / 3600
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'agent_id': self.agent_id,
+            'agent_name': self.agent.full_name if self.agent else 'Unknown',
+            'shift_date': self.shift_date.isoformat(),
+            'start_time': self.start_time.strftime('%H:%M'),
+            'end_time': self.end_time.strftime('%H:%M'),
+            'duration_hours': round(self.get_duration_hours(), 2)
+        }
+
+
 class BreakRecord(db.Model):
     """Break record model"""
     id = db.Column(db.Integer, primary_key=True)
     agent_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    break_type = db.Column(db.String(20), nullable=False)
+    break_type = db.Column(db.String(50), nullable=False)
     start_time = db.Column(db.DateTime, nullable=False)
     start_screenshot = db.Column(db.String(255))
     end_time = db.Column(db.DateTime)
@@ -490,6 +522,163 @@ def create_agent():
 def uploaded_file(filename):
     """Serve uploaded files"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+# ==================== SHIFT MANAGEMENT API ====================
+
+@app.route('/api/shifts', methods=['GET'])
+@login_required
+def get_shifts():
+    """Get shifts for a date range"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    start_date = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
+    end_date = request.args.get('end_date', start_date)
+    agent_id = request.args.get('agent_id', '')
+    
+    query = Shift.query.filter(
+        Shift.shift_date >= start_date,
+        Shift.shift_date <= end_date
+    )
+    
+    if agent_id:
+        query = query.filter_by(agent_id=int(agent_id))
+    
+    shifts = query.order_by(Shift.shift_date, Shift.start_time).all()
+    
+    return jsonify({
+        'shifts': [s.to_dict() for s in shifts],
+        'total': len(shifts)
+    })
+
+
+@app.route('/api/shift/create', methods=['POST'])
+@login_required
+def create_shift():
+    """Create a new shift"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.json
+    agent_id = data.get('agent_id')
+    shift_date = data.get('shift_date')
+    start_time = data.get('start_time')
+    end_time = data.get('end_time')
+    
+    if not all([agent_id, shift_date, start_time, end_time]):
+        return jsonify({'error': 'All fields are required'}), 400
+    
+    # Verify agent exists
+    agent = User.query.filter_by(id=agent_id, role=ROLE_AGENT).first()
+    if not agent:
+        return jsonify({'error': 'Agent not found'}), 404
+    
+    try:
+        shift_date_obj = datetime.strptime(shift_date, '%Y-%m-%d').date()
+        start_time_obj = datetime.strptime(start_time, '%H:%M').time()
+        end_time_obj = datetime.strptime(end_time, '%H:%M').time()
+    except ValueError:
+        return jsonify({'error': 'Invalid date or time format'}), 400
+    
+    # Check if shift already exists for this agent on this date
+    existing = Shift.query.filter_by(agent_id=agent_id, shift_date=shift_date_obj).first()
+    if existing:
+        # Update existing shift
+        existing.start_time = start_time_obj
+        existing.end_time = end_time_obj
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': 'Shift updated',
+            'shift': existing.to_dict()
+        })
+    
+    # Create new shift
+    shift = Shift(
+        agent_id=agent_id,
+        shift_date=shift_date_obj,
+        start_time=start_time_obj,
+        end_time=end_time_obj,
+        created_by=current_user.id
+    )
+    db.session.add(shift)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Shift created',
+        'shift': shift.to_dict()
+    })
+
+
+@app.route('/api/shift/<int:shift_id>', methods=['DELETE'])
+@login_required
+def delete_shift(shift_id):
+    """Delete a shift"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    shift = Shift.query.get_or_404(shift_id)
+    db.session.delete(shift)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Shift deleted'})
+
+
+@app.route('/api/shift/bulk', methods=['POST'])
+@login_required
+def create_bulk_shifts():
+    """Create shifts for multiple agents at once"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.json
+    agent_ids = data.get('agent_ids', [])
+    shift_date = data.get('shift_date')
+    start_time = data.get('start_time')
+    end_time = data.get('end_time')
+    
+    if not all([agent_ids, shift_date, start_time, end_time]):
+        return jsonify({'error': 'All fields are required'}), 400
+    
+    try:
+        shift_date_obj = datetime.strptime(shift_date, '%Y-%m-%d').date()
+        start_time_obj = datetime.strptime(start_time, '%H:%M').time()
+        end_time_obj = datetime.strptime(end_time, '%H:%M').time()
+    except ValueError:
+        return jsonify({'error': 'Invalid date or time format'}), 400
+    
+    created = 0
+    updated = 0
+    
+    for agent_id in agent_ids:
+        agent = User.query.filter_by(id=agent_id, role=ROLE_AGENT).first()
+        if not agent:
+            continue
+        
+        existing = Shift.query.filter_by(agent_id=agent_id, shift_date=shift_date_obj).first()
+        if existing:
+            existing.start_time = start_time_obj
+            existing.end_time = end_time_obj
+            updated += 1
+        else:
+            shift = Shift(
+                agent_id=agent_id,
+                shift_date=shift_date_obj,
+                start_time=start_time_obj,
+                end_time=end_time_obj,
+                created_by=current_user.id
+            )
+            db.session.add(shift)
+            created += 1
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'Created {created} shifts, updated {updated} shifts'
+    })
 
 
 # ==================== STARTUP ====================

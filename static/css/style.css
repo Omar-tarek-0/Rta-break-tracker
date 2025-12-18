@@ -470,6 +470,52 @@ body {
     margin-top: 5px;
 }
 
+/* ==================== TABS ==================== */
+
+.tab-nav {
+    display: flex;
+    gap: 5px;
+    padding: 0 20px;
+    background: var(--surface);
+    border-bottom: 2px solid var(--border);
+}
+
+.tab-btn {
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.tab-btn:hover {
+    color: var(--text);
+}
+
+.tab-btn.active {
+    color: var(--primary);
+}
+
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--primary);
+}
+
+.tab-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
 /* ==================== DASHBOARD ==================== */
 
 .dashboard-content {
@@ -826,6 +872,122 @@ body {
 .loading {
     text-align: center;
     padding: 40px;
+    color: var(--text-secondary);
+}
+
+/* ==================== SHIFTS ==================== */
+
+.shift-time-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.shift-time-inputs .form-group {
+    margin-bottom: 0;
+}
+
+.shift-time-inputs label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    display: block;
+}
+
+.shifts-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+}
+
+.shifts-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.shifts-table th,
+.shifts-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.shifts-table th {
+    background: var(--surface-light);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.shifts-table td {
+    font-size: 14px;
+}
+
+.shifts-table tr:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.shifts-table .col-check {
+    width: 60px;
+    text-align: center;
+}
+
+.shifts-table .col-agent {
+    width: 200px;
+}
+
+.shifts-table .col-shift {
+    width: auto;
+}
+
+.shifts-table .col-hours {
+    width: 80px;
+    text-align: center;
+}
+
+.shifts-table .col-actions {
+    width: 80px;
+    text-align: center;
+}
+
+.agent-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.shift-display {
+    font-weight: 500;
+}
+
+.shift-display .no-shift {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.shift-display .has-shift {
+    color: var(--success);
+}
+
+.hours-display {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.shift-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
     color: var(--text-secondary);
 }
 
