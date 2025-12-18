@@ -291,8 +291,8 @@ body {
 
 .break-types {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
     margin-bottom: 20px;
 }
 
@@ -301,13 +301,14 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 15px 10px;
+    padding: 10px 5px;
     background: var(--surface-light);
     border: 2px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
     color: var(--text);
+    min-height: 70px;
 }
 
 .break-type-btn:hover:not(.disabled) {
@@ -326,17 +327,19 @@ body {
 }
 
 .break-type-btn .emoji {
-    font-size: 24px;
-    margin-bottom: 5px;
+    font-size: 20px;
+    margin-bottom: 3px;
 }
 
 .break-type-btn .name {
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 500;
+    text-align: center;
+    line-height: 1.2;
 }
 
 .break-type-btn .duration {
-    font-size: 10px;
+    font-size: 9px;
     color: var(--text-secondary);
 }
 
@@ -846,7 +849,7 @@ body {
     }
     
     .break-types {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
     }
 }
 
@@ -862,7 +865,7 @@ body {
     }
     
     .break-types {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
     }
 }
 
