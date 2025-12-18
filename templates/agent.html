@@ -172,7 +172,9 @@
         hasActiveBreak: {% if active_break %}true{% else %}false{% endif %},
         activeBreakId: {% if active_break %}{{ active_break.id }}{% else %}null{% endif %},
         activeBreakStart: {% if active_break %}"{{ active_break.start_time.isoformat() }}"{% else %}null{% endif %},
-        punchStatus: "{{ punch_status }}"
+        activeBreakType: {% if active_break %}"{{ active_break.break_type }}"{% else %}null{% endif %},
+        punchStatus: "{{ punch_status }}",
+        breakInfo: {{ break_types|tojson }}
     };
 </script>
 {% endblock %}

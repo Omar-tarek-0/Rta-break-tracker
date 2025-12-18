@@ -421,11 +421,6 @@ def start_break():
     if current_user.is_rtm():
         return jsonify({'error': 'RTM cannot take breaks'}), 403
     
-    # Check for active break
-    active = BreakRecord.query.filter_by(agent_id=current_user.id, end_time=None).first()
-    if active:
-        return jsonify({'error': 'You already have an active break'}), 400
-    
     break_type = request.form.get('break_type')
     screenshot = request.files.get('screenshot')
     
@@ -435,24 +430,106 @@ def start_break():
     if not screenshot:
         return jsonify({'error': 'Screenshot is required'}), 400
     
+    # Check punch status for non-punch actions
+    if break_type not in ['punch_in', 'punch_out']:
+        # Check if punched in
+        today = get_local_time().date()
+        punch_in = BreakRecord.query.filter(
+            BreakRecord.agent_id == current_user.id,
+            BreakRecord.break_type == 'punch_in',
+            db.func.date(BreakRecord.start_time) == today
+        ).first()
+        
+        if not punch_in:
+            return jsonify({'error': 'Please punch in first to start your day'}), 400
+        
+        # Check if already punched out
+        punch_out = BreakRecord.query.filter(
+            BreakRecord.agent_id == current_user.id,
+            BreakRecord.break_type == 'punch_out',
+            db.func.date(BreakRecord.start_time) == today
+        ).first()
+        
+        if punch_out:
+            return jsonify({'error': 'You have already punched out for today'}), 400
+        
+        # Check for active break
+        active = BreakRecord.query.filter_by(agent_id=current_user.id, end_time=None).first()
+        if active:
+            return jsonify({'error': 'You already have an active break'}), 400
+    
+    # For punch_in, check if already punched in today
+    if break_type == 'punch_in':
+        today = get_local_time().date()
+        existing_punch = BreakRecord.query.filter(
+            BreakRecord.agent_id == current_user.id,
+            BreakRecord.break_type == 'punch_in',
+            db.func.date(BreakRecord.start_time) == today
+        ).first()
+        if existing_punch:
+            return jsonify({'error': 'You have already punched in today'}), 400
+    
+    # For punch_out, check if punched in and not already punched out
+    if break_type == 'punch_out':
+        today = get_local_time().date()
+        punch_in = BreakRecord.query.filter(
+            BreakRecord.agent_id == current_user.id,
+            BreakRecord.break_type == 'punch_in',
+            db.func.date(BreakRecord.start_time) == today
+        ).first()
+        if not punch_in:
+            return jsonify({'error': 'Please punch in first'}), 400
+        
+        punch_out = BreakRecord.query.filter(
+            BreakRecord.agent_id == current_user.id,
+            BreakRecord.break_type == 'punch_out',
+            db.func.date(BreakRecord.start_time) == today
+        ).first()
+        if punch_out:
+            return jsonify({'error': 'You have already punched out today'}), 400
+        
+        # Check for active break - must end it before punching out
+        active = BreakRecord.query.filter_by(agent_id=current_user.id, end_time=None).first()
+        if active and active.break_type not in ['punch_in', 'punch_out']:
+            return jsonify({'error': 'Please end your current break before punching out'}), 400
+    
     # Save screenshot
     screenshot_path = save_screenshot(screenshot)
     if not screenshot_path:
         return jsonify({'error': 'Invalid screenshot file'}), 400
     
+    # Get current time
+    now = get_local_time().replace(tzinfo=None)
+    
     # Create break record
     break_record = BreakRecord(
         agent_id=current_user.id,
         break_type=break_type,
-        start_time=get_local_time().replace(tzinfo=None),
+        start_time=now,
         start_screenshot=screenshot_path
     )
+    
+    # For punch_in and punch_out, auto-complete immediately (single screenshot)
+    if break_type in ['punch_in', 'punch_out']:
+        break_record.end_time = now
+        break_record.end_screenshot = screenshot_path  # Use same screenshot
+        break_record.duration_minutes = 0
+        break_record.is_overdue = False
+    
     db.session.add(break_record)
     db.session.commit()
     
+    # Return appropriate message
+    if break_type == 'punch_in':
+        message = 'Punched in successfully! You can now take breaks.'
+    elif break_type == 'punch_out':
+        message = 'Punched out successfully! Have a great day!'
+    else:
+        message = f'{BREAK_INFO[break_type]["name"]} started! Return within {BREAK_DURATIONS[break_type]} minutes'
+    
     return jsonify({
         'success': True,
-        'message': f'Break started! Return within {BREAK_DURATIONS[break_type]} minutes',
+        'message': message,
         'break': break_record.to_dict()
     })
 
