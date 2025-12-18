@@ -8,6 +8,18 @@
     <header class="header">
         <div class="header-left">
             <h1>🖥️ RTA Break Tracker</h1>
+            {% if today_shift %}
+            <div class="shift-badge">
+                <span class="shift-icon">📅</span>
+                <span class="shift-time">{{ today_shift.start_time.strftime('%I:%M %p') }} - {{ today_shift.end_time.strftime('%I:%M %p') }}</span>
+                <span class="shift-hours">({{ "%.1f"|format(today_shift.get_duration_hours()) }}h)</span>
+            </div>
+            {% else %}
+            <div class="shift-badge no-shift">
+                <span class="shift-icon">⚠️</span>
+                <span>No shift assigned today</span>
+            </div>
+            {% endif %}
         </div>
         <div class="header-right">
             <span class="user-info">👤 {{ user.full_name }}</span>

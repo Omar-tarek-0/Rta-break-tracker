@@ -194,6 +194,35 @@ body {
     font-weight: 700;
 }
 
+.shift-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #1a73e8, #0d47a1);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.shift-badge.no-shift {
+    background: linear-gradient(135deg, #666, #444);
+    opacity: 0.8;
+}
+
+.shift-icon {
+    font-size: 14px;
+}
+
+.shift-time {
+    font-weight: 600;
+}
+
+.shift-hours {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 11px;
+}
+
 .header-date {
     color: var(--text-secondary);
     font-size: 13px;

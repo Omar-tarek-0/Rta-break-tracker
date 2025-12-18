@@ -282,10 +282,17 @@ def agent_view():
         db.func.date(BreakRecord.start_time) == today
     ).order_by(BreakRecord.start_time.desc()).all()
     
+    # Get today's shift for this agent
+    today_shift = Shift.query.filter_by(
+        agent_id=current_user.id,
+        shift_date=today
+    ).first()
+    
     return render_template('agent.html',
         user=current_user,
         active_break=active_break,
         today_breaks=today_breaks,
+        today_shift=today_shift,
         break_types=BREAK_INFO,
         break_durations=BREAK_DURATIONS
     )
