@@ -41,6 +41,7 @@
     <div class="tab-nav">
         <button class="tab-btn active" data-tab="breaks">📋 Break Records</button>
         <button class="tab-btn" data-tab="shifts">📅 Shift Management</button>
+        <button class="tab-btn" data-tab="reports">📊 Reports & Export</button>
     </div>
     
     <!-- Tab: Breaks -->
@@ -188,6 +189,95 @@
                                 </td>
                             </tr>
                             {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Tab: Reports -->
+    <div id="tab-reports" class="tab-content" style="display: none;">
+        <div class="dashboard-content">
+            <!-- Sidebar: Report Options -->
+            <aside class="sidebar">
+                <div class="filter-section">
+                    <h4>📅 Report Period</h4>
+                    <div class="form-group">
+                        <label>Start Date</label>
+                        <input type="date" id="reportStartDate" class="form-input" value="{{ date_filter }}">
+                    </div>
+                    <div class="form-group">
+                        <label>End Date</label>
+                        <input type="date" id="reportEndDate" class="form-input" value="{{ date_filter }}">
+                    </div>
+                </div>
+                
+                <div class="filter-section">
+                    <h4>📋 Quick Periods</h4>
+                    <button class="btn btn-sm btn-block" onclick="setReportPeriod('today')">Today</button>
+                    <button class="btn btn-sm btn-block" onclick="setReportPeriod('yesterday')">Yesterday</button>
+                    <button class="btn btn-sm btn-block" onclick="setReportPeriod('week')">Last 7 Days</button>
+                    <button class="btn btn-sm btn-block" onclick="setReportPeriod('month')">Last 30 Days</button>
+                </div>
+                
+                <hr class="divider">
+                
+                <button class="btn btn-primary btn-block" onclick="loadMetrics()">📊 Generate Report</button>
+                <button class="btn btn-success btn-block" onclick="exportToExcel()">📥 Export to Excel</button>
+            </aside>
+            
+            <!-- Main: Metrics Display -->
+            <main class="main-area">
+                <div class="main-header">
+                    <h2>📊 Agent Metrics Report</h2>
+                    <span id="reportPeriodLabel" class="records-count"></span>
+                </div>
+                
+                <!-- Summary Cards -->
+                <div class="metrics-summary" id="metricsSummary">
+                    <div class="metric-card">
+                        <div class="metric-value" id="avgUtilization">--%</div>
+                        <div class="metric-label">Avg Utilization</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="avgAdherence">--%</div>
+                        <div class="metric-label">Avg Adherence</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="avgConformance">--%</div>
+                        <div class="metric-label">Avg Conformance</div>
+                    </div>
+                    <div class="metric-card warning">
+                        <div class="metric-value" id="totalIncidents">--</div>
+                        <div class="metric-label">Total Incidents</div>
+                    </div>
+                    <div class="metric-card danger">
+                        <div class="metric-value" id="totalExceeding">-- min</div>
+                        <div class="metric-label">Exceeding Breaks</div>
+                    </div>
+                </div>
+                
+                <!-- Metrics Table -->
+                <div class="metrics-container" id="metricsContainer">
+                    <table class="metrics-table">
+                        <thead>
+                            <tr>
+                                <th>Agent Name</th>
+                                <th>Scheduled Hours</th>
+                                <th>Breaks</th>
+                                <th>Break Time</th>
+                                <th>Exceeding</th>
+                                <th>Incidents</th>
+                                <th>Utilization</th>
+                                <th>Adherence</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="metricsTableBody">
+                            <tr>
+                                <td colspan="9" class="empty-message">Click "Generate Report" to view metrics</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
