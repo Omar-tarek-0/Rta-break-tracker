@@ -292,11 +292,38 @@ def agent_view():
         shift_date=today
     ).first()
     
+    # Check punch in/out status for today
+    punch_in = BreakRecord.query.filter(
+        BreakRecord.agent_id == current_user.id,
+        BreakRecord.break_type == 'punch_in',
+        db.func.date(BreakRecord.start_time) == today
+    ).first()
+    
+    punch_out = BreakRecord.query.filter(
+        BreakRecord.agent_id == current_user.id,
+        BreakRecord.break_type == 'punch_out',
+        db.func.date(BreakRecord.start_time) == today
+    ).first()
+    
+    # Determine agent status
+    # not_punched_in: hasn't punched in yet today
+    # punched_in: punched in but not out
+    # punched_out: already punched out for the day
+    if not punch_in:
+        punch_status = 'not_punched_in'
+    elif punch_out:
+        punch_status = 'punched_out'
+    else:
+        punch_status = 'punched_in'
+    
     return render_template('agent.html',
         user=current_user,
         active_break=active_break,
         today_breaks=today_breaks,
         today_shift=today_shift,
+        punch_status=punch_status,
+        punch_in_time=punch_in.start_time if punch_in else None,
+        punch_out_time=punch_out.start_time if punch_out else None,
         break_types=BREAK_INFO,
         break_durations=BREAK_DURATIONS
     )
