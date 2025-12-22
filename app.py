@@ -692,15 +692,19 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     else:
         utilization = 0
     
-    # Calculate adherence based on actual duration vs allowed duration for each break
-    # For each break: adherence = min(actual_duration, allowed_duration) / allowed_duration
-    # Then average all break adherence percentages
-    total_completed_breaks = len([b for b in breaks if b.end_time])
+    # Calculate adherence based on:
+    # 1. Break durations (actual vs allowed)
+    # 2. Punch in time vs shift start time
+    # 3. Punch out time vs shift end time
+    
+    adherence_scores = []
+    
+    # 1. Break duration adherence
+    total_completed_breaks = len([b for b in breaks if b.end_time and b.break_type not in ['punch_in', 'punch_out']])
     
     if total_completed_breaks > 0:
-        break_adherence_scores = []
         for b in breaks:
-            if b.end_time and b.duration_minutes is not None:
+            if b.end_time and b.duration_minutes is not None and b.break_type not in ['punch_in', 'punch_out']:
                 allowed_duration = b.get_allowed_duration()
                 if allowed_duration > 0:
                     # Calculate adherence for this break
@@ -713,14 +717,83 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
                         # Penalty: adherence decreases when exceeding allowed time
                         # Formula: (allowed_duration / actual_duration) * 100
                         break_adherence = (allowed_duration / actual_duration) * 100
-                    break_adherence_scores.append(break_adherence)
+                    adherence_scores.append(break_adherence)
+    
+    # 2. Punch in/out adherence based on shift times
+    # Group shifts by date for easier lookup
+    shifts_by_date = {s.shift_date: s for s in shifts}
+    
+    # Group punch in/out by date
+    punch_records_by_date = {}
+    for b in breaks:
+        if b.break_type in ['punch_in', 'punch_out'] and b.start_time:
+            punch_date = b.start_time.date()
+            if punch_date not in punch_records_by_date:
+                punch_records_by_date[punch_date] = {}
+            punch_records_by_date[punch_date][b.break_type] = b
+    
+    # Calculate punch in/out adherence for each day with a shift
+    for shift_date, shift in shifts_by_date.items():
+        punch_records = punch_records_by_date.get(shift_date, {})
         
-        if break_adherence_scores:
-            adherence = sum(break_adherence_scores) / len(break_adherence_scores)
+        # Punch in adherence
+        if 'punch_in' in punch_records:
+            punch_in = punch_records['punch_in']
+            punch_in_time = punch_in.start_time.time()
+            shift_start_time = shift.start_time
+            
+            # Calculate difference in minutes
+            punch_in_datetime = datetime.combine(shift_date, punch_in_time)
+            shift_start_datetime = datetime.combine(shift_date, shift_start_time)
+            
+            # Allow 5 minutes grace period (early or late)
+            time_diff_minutes = abs((punch_in_datetime - shift_start_datetime).total_seconds() / 60)
+            
+            if time_diff_minutes <= 5:
+                punch_in_adherence = 100.0
+            else:
+                # Penalty: decrease adherence for being late/early
+                # Max penalty at 30 minutes = 0% adherence
+                # Formula: max(0, (30 - time_diff) / 30 * 100)
+                punch_in_adherence = max(0, (30 - time_diff_minutes) / 30 * 100)
+            adherence_scores.append(punch_in_adherence)
         else:
-            adherence = 100  # No completed breaks with duration
+            # No punch in = 0% adherence for that day
+            adherence_scores.append(0.0)
+        
+        # Punch out adherence
+        if 'punch_out' in punch_records:
+            punch_out = punch_records['punch_out']
+            punch_out_time = punch_out.start_time.time()
+            shift_end_time = shift.end_time
+            
+            # Calculate difference in minutes
+            punch_out_datetime = datetime.combine(shift_date, punch_out_time)
+            shift_end_datetime = datetime.combine(shift_date, shift_end_time)
+            
+            # Handle overnight shifts
+            if shift_end_time < shift.start_time:
+                shift_end_datetime += timedelta(days=1)
+            
+            # Allow 5 minutes grace period (early or late)
+            time_diff_minutes = abs((punch_out_datetime - shift_end_datetime).total_seconds() / 60)
+            
+            if time_diff_minutes <= 5:
+                punch_out_adherence = 100.0
+            else:
+                # Penalty: decrease adherence for being late/early
+                # Max penalty at 30 minutes = 0% adherence
+                punch_out_adherence = max(0, (30 - time_diff_minutes) / 30 * 100)
+            adherence_scores.append(punch_out_adherence)
+        else:
+            # No punch out = 0% adherence for that day
+            adherence_scores.append(0.0)
+    
+    # Calculate overall adherence as average of all scores
+    if adherence_scores:
+        adherence = sum(adherence_scores) / len(adherence_scores)
     else:
-        adherence = 100  # No breaks = 100% adherence
+        adherence = 100  # No data = 100% adherence (default)
     
     # Conformance (similar to adherence but measures schedule following)
     # For simplicity: conformance = did agent have shifts and follow them
