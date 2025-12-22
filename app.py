@@ -207,8 +207,15 @@ def save_screenshot(file):
 
 
 def init_db():
-    """Initialize database and create default users"""
-    db.create_all()
+    """Initialize database and create default users
+    
+    IMPORTANT: This function is SAFE - it does NOT delete existing data!
+    - db.create_all() only creates tables if they don't exist
+    - It does NOT drop existing tables
+    - It does NOT delete any data
+    - Your users, breaks, and shifts will persist across deployments
+    """
+    db.create_all()  # Safe: Only creates missing tables, never drops existing ones
     
     # Create default users if they don't exist
     for user_data in DEFAULT_USERS:
