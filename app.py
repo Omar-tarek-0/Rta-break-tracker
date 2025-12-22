@@ -692,11 +692,33 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     else:
         utilization = 0
     
-    # Calculate adherence (breaks within allowed time / total breaks)
+    # Calculate adherence based on actual duration vs allowed duration for each break
+    # For each break: adherence = min(actual_duration, allowed_duration) / allowed_duration
+    # Then average all break adherence percentages
     total_completed_breaks = len([b for b in breaks if b.end_time])
-    on_time_breaks = total_completed_breaks - incidents
+    
     if total_completed_breaks > 0:
-        adherence = (on_time_breaks / total_completed_breaks) * 100
+        break_adherence_scores = []
+        for b in breaks:
+            if b.end_time and b.duration_minutes is not None:
+                allowed_duration = b.get_allowed_duration()
+                if allowed_duration > 0:
+                    # Calculate adherence for this break
+                    # If they took less or equal to allowed time, 100% adherence
+                    # If they exceeded, calculate as allowed / actual (penalty for exceeding)
+                    actual_duration = b.duration_minutes
+                    if actual_duration <= allowed_duration:
+                        break_adherence = 100.0
+                    else:
+                        # Penalty: adherence decreases when exceeding allowed time
+                        # Formula: (allowed_duration / actual_duration) * 100
+                        break_adherence = (allowed_duration / actual_duration) * 100
+                    break_adherence_scores.append(break_adherence)
+        
+        if break_adherence_scores:
+            adherence = sum(break_adherence_scores) / len(break_adherence_scores)
+        else:
+            adherence = 100  # No completed breaks with duration
     else:
         adherence = 100  # No breaks = 100% adherence
     
