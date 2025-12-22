@@ -8,17 +8,11 @@ let selectedBreakType = null;
 let selectedFile = null;
 
 // Initialize agent view
-if (document.getElementById('breakTypes') || document.querySelector('.punch-section')) {
+if (document.getElementById('breakTypes')) {
     initAgentView();
 }
 
 function initAgentView() {
-    // Check if we're in punch-in mode (pre-select punch_in)
-    const punchBtn = document.querySelector('.punch-section .punch-btn');
-    if (punchBtn && window.agentData && window.agentData.punchStatus === 'not_punched_in') {
-        selectedBreakType = 'punch_in';
-    }
-    
     // Break type selection
     document.querySelectorAll('.break-type-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -123,38 +117,16 @@ function handleFileSelect(file) {
 
 function updateSubmitButton() {
     const btn = document.getElementById('submitBtn');
-    if (!btn) return;
-    
     const hasActiveBreak = window.agentData && window.agentData.hasActiveBreak;
-    const punchStatus = window.agentData && window.agentData.punchStatus;
-    const breakInfo = window.agentData && window.agentData.breakInfo;
-    const activeBreakType = window.agentData && window.agentData.activeBreakType;
     
-    if (punchStatus === 'not_punched_in') {
-        // Punch in mode
+    if (hasActiveBreak) {
+        // End break mode
         btn.disabled = !selectedFile;
-        btn.textContent = '🟢 Punch In';
-    } else if (hasActiveBreak) {
-        // End break mode - show break name
-        btn.disabled = !selectedFile;
-        if (activeBreakType && breakInfo && breakInfo[activeBreakType]) {
-            const breakName = breakInfo[activeBreakType].name;
-            btn.textContent = `🏁 End ${breakName}`;
-        } else {
-            btn.textContent = '🏁 Submit Break End';
-        }
+        btn.textContent = '🏁 Submit Break End';
     } else {
-        // Start break mode - show break name
+        // Start break mode
         btn.disabled = !selectedFile || !selectedBreakType;
-        
-        if (selectedBreakType === 'punch_out') {
-            btn.textContent = '🔴 Punch Out';
-        } else if (selectedBreakType && breakInfo && breakInfo[selectedBreakType]) {
-            const breakName = breakInfo[selectedBreakType].name;
-            btn.textContent = `🚀 Submit ${breakName}`;
-        } else {
-            btn.textContent = '🚀 Submit Break Start';
-        }
+        btn.textContent = '🚀 Submit Break Start';
     }
 }
 
@@ -528,57 +500,36 @@ function hideImageModal() {
     document.getElementById('imageModal').style.display = 'none';
 }
 
-// Close modals on escape
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        hideAddAgentModal();
-        hideImageModal();
-    }
-});
-
-// Close modals on background click
-document.querySelectorAll('.modal').forEach(modal => {
-    modal.addEventListener('click', function(e) {
-        if (e.target === this) {
-            this.style.display = 'none';
-        }
-    });
-});
-
-
-// ==================== TAB NAVIGATION ====================
-
-document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        const tabId = this.dataset.tab;
-        
-        // Update button states
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        this.classList.add('active');
-        
-        // Show/hide tab content
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.style.display = 'none';
-            content.classList.remove('active');
-        });
-        
-        const tabContent = document.getElementById('tab-' + tabId);
-        if (tabContent) {
-            tabContent.style.display = 'flex';
-            tabContent.classList.add('active');
-            
-            // Load data for the tab
-            if (tabId === 'shifts') {
-                loadShifts();
-            }
-        }
-    });
-});
-
-
 // ==================== SHIFT MANAGEMENT ====================
 
-let shiftsData = {};
+function showShiftModal() {
+    document.getElementById('shiftModal').style.display = 'flex';
+    // Set default dates (today to 2 weeks from today)
+    const today = new Date();
+    const twoWeeksLater = new Date(today);
+    twoWeeksLater.setDate(twoWeeksLater.getDate() + 13); // 14 days total (today + 13 more)
+    
+    document.getElementById('shiftStartDate').value = formatDate(today);
+    document.getElementById('shiftEndDate').value = formatDate(twoWeeksLater);
+    document.getElementById('shiftError').textContent = '';
+    document.getElementById('shiftSuccess').style.display = 'none';
+    
+    // Select all agents by default
+    selectAllAgents();
+}
+
+function hideShiftModal() {
+    document.getElementById('shiftModal').style.display = 'none';
+}
+
+function setTwoWeeks() {
+    const today = new Date();
+    const twoWeeksLater = new Date(today);
+    twoWeeksLater.setDate(twoWeeksLater.getDate() + 13); // 14 days total
+    
+    document.getElementById('shiftStartDate').value = formatDate(today);
+    document.getElementById('shiftEndDate').value = formatDate(twoWeeksLater);
+}
 
 function setShiftTemplate(start, end) {
     document.getElementById('shiftStartTime').value = start;
@@ -593,69 +544,44 @@ function deselectAllAgents() {
     document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false);
 }
 
-async function loadShifts() {
-    const shiftDate = document.getElementById('shiftDate').value;
-    if (!shiftDate) return;
+async function saveBulkShifts() {
+    const startDate = document.getElementById('shiftStartDate').value;
+    const endDate = document.getElementById('shiftEndDate').value;
+    const startTime = document.getElementById('shiftStartTime').value;
+    const endTime = document.getElementById('shiftEndTime').value;
     
-    try {
-        const response = await fetch(`/api/shifts?start_date=${shiftDate}&end_date=${shiftDate}`);
-        const data = await response.json();
-        
-        if (data.error) {
-            console.error('Error loading shifts:', data.error);
-            return;
-        }
-        
-        // Store shifts data
-        shiftsData = {};
-        data.shifts.forEach(shift => {
-            shiftsData[shift.agent_id] = shift;
-        });
-        
-        // Update table display
-        updateShiftsTable();
-        
-    } catch (err) {
-        console.error('Failed to load shifts:', err);
+    if (!startDate || !endDate || !startTime || !endTime) {
+        document.getElementById('shiftError').textContent = '⚠️ Please fill in all fields';
+        return;
     }
-}
-
-function updateShiftsTable() {
-    document.querySelectorAll('#shiftsTableBody tr').forEach(row => {
-        const agentId = parseInt(row.dataset.agentId);
-        const shiftDisplay = row.querySelector('.shift-display');
-        const hoursDisplay = row.querySelector('.hours-display');
-        
-        if (shiftsData[agentId]) {
-            const shift = shiftsData[agentId];
-            shiftDisplay.innerHTML = `<span class="has-shift">🕐 ${shift.start_time} - ${shift.end_time}</span>`;
-            hoursDisplay.textContent = shift.duration_hours + 'h';
-        } else {
-            shiftDisplay.innerHTML = '<span class="no-shift">No shift set</span>';
-            hoursDisplay.textContent = '-';
-        }
-    });
-}
-
-async function saveSelectedShifts() {
+    
+    // Validate date range
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    
+    if (daysDiff > 14) {
+        document.getElementById('shiftError').textContent = '⚠️ Date range cannot exceed 14 days (2 weeks)';
+        return;
+    }
+    
+    if (daysDiff < 1) {
+        document.getElementById('shiftError').textContent = '⚠️ End date must be after start date';
+        return;
+    }
+    
     const selectedAgents = [];
     document.querySelectorAll('.agent-checkbox:checked').forEach(cb => {
         selectedAgents.push(parseInt(cb.value));
     });
     
     if (selectedAgents.length === 0) {
-        alert('Please select at least one agent');
+        document.getElementById('shiftError').textContent = '⚠️ Please select at least one agent';
         return;
     }
     
-    const shiftDate = document.getElementById('shiftDate').value;
-    const startTime = document.getElementById('shiftStartTime').value;
-    const endTime = document.getElementById('shiftEndTime').value;
-    
-    if (!shiftDate || !startTime || !endTime) {
-        alert('Please fill in all shift details');
-        return;
-    }
+    document.getElementById('shiftError').textContent = '';
+    document.getElementById('shiftSuccess').style.display = 'none';
     
     try {
         const response = await fetch('/api/shift/bulk', {
@@ -663,7 +589,8 @@ async function saveSelectedShifts() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 agent_ids: selectedAgents,
-                shift_date: shiftDate,
+                start_date: startDate,
+                end_date: endDate,
                 start_time: startTime,
                 end_time: endTime
             })
@@ -672,164 +599,37 @@ async function saveSelectedShifts() {
         const data = await response.json();
         
         if (data.success) {
-            alert(data.message);
-            deselectAllAgents();
-            loadShifts();
-        } else {
-            alert('Error: ' + data.error);
-        }
-    } catch (err) {
-        alert('Network error: ' + err.message);
-    }
-}
-
-async function deleteShift(agentId) {
-    const shift = shiftsData[agentId];
-    if (!shift) {
-        alert('No shift to delete for this agent on selected date');
-        return;
-    }
-    
-    if (!confirm('Delete this shift?')) return;
-    
-    try {
-        const response = await fetch(`/api/shift/${shift.id}`, {
-            method: 'DELETE'
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            loadShifts();
-        } else {
-            alert('Error: ' + data.error);
-        }
-    } catch (err) {
-        alert('Network error: ' + err.message);
-    }
-}
-
-// Load shifts when date changes
-if (document.getElementById('shiftDate')) {
-    document.getElementById('shiftDate').addEventListener('change', loadShifts);
-}
-
-
-// ==================== REPORTS & METRICS ====================
-
-function setReportPeriod(period) {
-    const today = new Date();
-    let startDate, endDate;
-    
-    if (period === 'today') {
-        startDate = endDate = formatDate(today);
-    } else if (period === 'yesterday') {
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        startDate = endDate = formatDate(yesterday);
-    } else if (period === 'week') {
-        const weekAgo = new Date(today);
-        weekAgo.setDate(weekAgo.getDate() - 6);
-        startDate = formatDate(weekAgo);
-        endDate = formatDate(today);
-    } else if (period === 'month') {
-        const monthAgo = new Date(today);
-        monthAgo.setDate(monthAgo.getDate() - 29);
-        startDate = formatDate(monthAgo);
-        endDate = formatDate(today);
-    }
-    
-    document.getElementById('reportStartDate').value = startDate;
-    document.getElementById('reportEndDate').value = endDate;
-    
-    loadMetrics();
-}
-
-async function loadMetrics() {
-    const startDate = document.getElementById('reportStartDate').value;
-    const endDate = document.getElementById('reportEndDate').value;
-    
-    if (!startDate || !endDate) {
-        alert('Please select a date range');
-        return;
-    }
-    
-    const tbody = document.getElementById('metricsTableBody');
-    tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading metrics...</td></tr>';
-    
-    try {
-        const response = await fetch(`/api/report/metrics?start_date=${startDate}&end_date=${endDate}`);
-        const data = await response.json();
-        
-        if (data.error) {
-            tbody.innerHTML = `<tr><td colspan="9" class="error-message">${data.error}</td></tr>`;
-            return;
-        }
-        
-        // Update summary cards
-        document.getElementById('avgUtilization').textContent = data.totals.avg_utilization + '%';
-        document.getElementById('avgAdherence').textContent = data.totals.avg_adherence + '%';
-        document.getElementById('avgConformance').textContent = data.totals.avg_conformance + '%';
-        document.getElementById('totalIncidents').textContent = data.totals.incidents;
-        document.getElementById('totalExceeding').textContent = data.totals.exceeding_break_minutes + ' min';
-        document.getElementById('totalEmergency').textContent = data.totals.emergency_count;
-        
-        // Update period label
-        document.getElementById('reportPeriodLabel').textContent = `${startDate} to ${endDate}`;
-        
-        // Populate table
-        if (data.agents.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="empty-message">No agents found</td></tr>';
-            return;
-        }
-        
-        tbody.innerHTML = '';
-        
-        data.agents.forEach(agent => {
-            let statusClass, statusText;
+            document.getElementById('shiftSuccess').textContent = `✅ ${data.message}`;
+            document.getElementById('shiftSuccess').style.display = 'block';
+            document.getElementById('shiftError').textContent = '';
             
-            if (agent.incidents === 0 && agent.exceeding_break_minutes === 0) {
-                statusClass = 'status-good';
-                statusText = '✅ Good';
-            } else if (agent.incidents <= 2 || agent.exceeding_break_minutes <= 15) {
-                statusClass = 'status-warning';
-                statusText = '⚠️ Warning';
-            } else {
-                statusClass = 'status-bad';
-                statusText = '❌ Review';
-            }
-            
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${agent.agent_name}</td>
-                <td>${agent.total_scheduled_hours}h</td>
-                <td>${agent.total_breaks}</td>
-                <td>${agent.total_break_minutes} min</td>
-                <td>${agent.exceeding_break_minutes} min</td>
-                <td>${agent.incidents}</td>
-                <td>${agent.emergency_count}</td>
-                <td>${agent.utilization}%</td>
-                <td>${agent.adherence}%</td>
-                <td class="${statusClass}">${statusText}</td>
-            `;
-            tbody.appendChild(row);
-        });
-        
+            // Clear form after 2 seconds
+            setTimeout(() => {
+                hideShiftModal();
+            }, 2000);
+        } else {
+            document.getElementById('shiftError').textContent = '⚠️ ' + data.error;
+        }
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="9" class="error-message">Error: ${err.message}</td></tr>`;
+        document.getElementById('shiftError').textContent = '⚠️ Network error: ' + err.message;
     }
 }
 
-function exportToExcel() {
-    const startDate = document.getElementById('reportStartDate').value;
-    const endDate = document.getElementById('reportEndDate').value;
-    
-    if (!startDate || !endDate) {
-        alert('Please select a date range first');
-        return;
+// Close modals on escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        hideAddAgentModal();
+        hideImageModal();
+        hideShiftModal();
     }
-    
-    // Trigger download
-    window.location.href = `/api/report/export?start_date=${startDate}&end_date=${endDate}`;
-}
+});
+
+// Close modals on background click
+document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.style.display = 'none';
+        }
+    });
+});
 

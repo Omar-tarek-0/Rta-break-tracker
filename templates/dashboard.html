@@ -37,257 +37,78 @@
         </div>
     </div>
     
-    <!-- Tab Navigation -->
-    <div class="tab-nav">
-        <button class="tab-btn active" data-tab="breaks">📋 Break Records</button>
-        <button class="tab-btn" data-tab="shifts">📅 Shift Management</button>
-        <button class="tab-btn" data-tab="reports">📊 Reports & Export</button>
-    </div>
-    
-    <!-- Tab: Breaks -->
-    <div id="tab-breaks" class="tab-content active">
-        <div class="dashboard-content">
-            <!-- Sidebar: Filters -->
-            <aside class="sidebar">
-                <div class="filter-section">
-                    <h4>🔍 Search</h4>
-                    <input type="text" id="searchInput" placeholder="Search agents..." class="form-input">
-                </div>
-                
-                <div class="filter-section">
-                    <h4>📅 Date Range</h4>
-                    <div class="date-buttons">
-                        <button class="btn btn-sm btn-primary" data-date="today">Today</button>
-                        <button class="btn btn-sm" data-date="yesterday">Yesterday</button>
-                        <button class="btn btn-sm" data-date="week">7 Days</button>
-                    </div>
-                    <div class="custom-date">
-                        <input type="date" id="customDate" class="form-input">
-                        <button class="btn btn-sm btn-primary" id="goDateBtn">Go</button>
-                    </div>
-                    <p class="current-filter" id="currentDateLabel">📆 Showing: Today</p>
-                </div>
-                
-                <div class="filter-section">
-                    <h4>👤 Filter by Agent</h4>
-                    <select id="agentFilter" class="form-select">
-                        <option value="">All Agents</option>
-                        {% for agent in agents %}
-                        <option value="{{ agent.id }}">{{ agent.full_name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <div class="filter-section">
-                    <h4>☕ Filter by Type</h4>
-                    <select id="typeFilter" class="form-select">
-                        <option value="">All Types</option>
-                        {% for key, info in break_types.items() %}
-                        <option value="{{ key }}">{{ info.emoji }} {{ info.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <button class="btn btn-primary btn-block" onclick="loadBreaks()">🔄 Refresh Data</button>
-                
-                <hr class="divider">
-                
-                <div class="filter-section">
-                    <h4>⚙️ Agent Management</h4>
-                    <button class="btn btn-success btn-block" onclick="showAddAgentModal()">➕ Add New Agent</button>
-                    <p class="agent-count">Total: {{ total_agents }} agents</p>
-                </div>
-            </aside>
+    <!-- Main Content -->
+    <div class="dashboard-content">
+        <!-- Sidebar: Filters -->
+        <aside class="sidebar">
+            <div class="filter-section">
+                <h4>🔍 Search</h4>
+                <input type="text" id="searchInput" placeholder="Search agents..." class="form-input">
+            </div>
             
-            <!-- Main: Break Records -->
-            <main class="main-area">
-                <div class="main-header">
-                    <h2>📋 Break Records</h2>
-                    <span id="recordsCount" class="records-count"></span>
+            <div class="filter-section">
+                <h4>📅 Date Range</h4>
+                <div class="date-buttons">
+                    <button class="btn btn-sm btn-primary" data-date="today">Today</button>
+                    <button class="btn btn-sm" data-date="yesterday">Yesterday</button>
+                    <button class="btn btn-sm" data-date="week">7 Days</button>
                 </div>
-                
-                <div id="breaksContainer" class="breaks-container">
-                    <div class="loading">Loading breaks...</div>
+                <div class="custom-date">
+                    <input type="date" id="customDate" class="form-input">
+                    <button class="btn btn-sm btn-primary" id="goDateBtn">Go</button>
                 </div>
-            </main>
-        </div>
-    </div>
-    
-    <!-- Tab: Shifts -->
-    <div id="tab-shifts" class="tab-content" style="display: none;">
-        <div class="dashboard-content">
-            <!-- Sidebar: Shift Controls -->
-            <aside class="sidebar">
-                <div class="filter-section">
-                    <h4>📅 Shift Date</h4>
-                    <input type="date" id="shiftDate" class="form-input" value="{{ date_filter }}">
-                </div>
-                
-                <div class="filter-section">
-                    <h4>⏰ Shift Time</h4>
-                    <div class="shift-time-inputs">
-                        <div class="form-group">
-                            <label>Start Time</label>
-                            <input type="time" id="shiftStartTime" class="form-input" value="09:00">
-                        </div>
-                        <div class="form-group">
-                            <label>End Time</label>
-                            <input type="time" id="shiftEndTime" class="form-input" value="17:00">
-                        </div>
-                    </div>
-                </div>
-                
-                <hr class="divider">
-                
-                <div class="filter-section">
-                    <h4>📋 Quick Templates</h4>
-                    <button class="btn btn-sm btn-block" onclick="setShiftTemplate('08:00', '17:00')">8 AM - 5 PM</button>
-                    <button class="btn btn-sm btn-block" onclick="setShiftTemplate('11:00', '20:00')">11 AM - 8 PM</button>
-                    <button class="btn btn-sm btn-block" onclick="setShiftTemplate('13:00', '22:00')">1 PM - 10 PM</button>
-                    <button class="btn btn-sm btn-block" onclick="setShiftTemplate('16:00', '01:00')">4 PM - 1 AM</button>
-                    <button class="btn btn-sm btn-block" onclick="setShiftTemplate('00:00', '09:00')">12 AM - 9 AM</button>
-                </div>
-                
-                <hr class="divider">
-                
-                <button class="btn btn-success btn-block" onclick="saveSelectedShifts()">💾 Save Selected Shifts</button>
-                <button class="btn btn-primary btn-block" onclick="loadShifts()">🔄 Refresh Shifts</button>
-            </aside>
+                <p class="current-filter" id="currentDateLabel">📆 Showing: Today</p>
+            </div>
             
-            <!-- Main: Shift Grid -->
-            <main class="main-area">
-                <div class="main-header">
-                    <h2>📅 Agent Shifts</h2>
-                    <div class="shift-actions">
-                        <button class="btn btn-sm" onclick="selectAllAgents()">☑️ Select All</button>
-                        <button class="btn btn-sm" onclick="deselectAllAgents()">☐ Deselect All</button>
-                    </div>
-                </div>
-                
-                <div id="shiftsContainer" class="shifts-container">
-                    <table class="shifts-table">
-                        <thead>
-                            <tr>
-                                <th class="col-check">Select</th>
-                                <th class="col-agent">Agent Name</th>
-                                <th class="col-shift">Current Shift</th>
-                                <th class="col-hours">Hours</th>
-                                <th class="col-actions">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="shiftsTableBody">
-                            {% for agent in agents %}
-                            <tr data-agent-id="{{ agent.id }}">
-                                <td><input type="checkbox" class="agent-checkbox" value="{{ agent.id }}"></td>
-                                <td>{{ agent.full_name }}</td>
-                                <td class="shift-display">
-                                    <span class="no-shift">No shift set</span>
-                                </td>
-                                <td class="hours-display">-</td>
-                                <td>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteShift({{ agent.id }})">🗑️</button>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </main>
-        </div>
-    </div>
-    
-    <!-- Tab: Reports -->
-    <div id="tab-reports" class="tab-content" style="display: none;">
-        <div class="dashboard-content">
-            <!-- Sidebar: Report Options -->
-            <aside class="sidebar">
-                <div class="filter-section">
-                    <h4>📅 Report Period</h4>
-                    <div class="form-group">
-                        <label>Start Date</label>
-                        <input type="date" id="reportStartDate" class="form-input" value="{{ date_filter }}">
-                    </div>
-                    <div class="form-group">
-                        <label>End Date</label>
-                        <input type="date" id="reportEndDate" class="form-input" value="{{ date_filter }}">
-                    </div>
-                </div>
-                
-                <div class="filter-section">
-                    <h4>📋 Quick Periods</h4>
-                    <button class="btn btn-sm btn-block" onclick="setReportPeriod('today')">Today</button>
-                    <button class="btn btn-sm btn-block" onclick="setReportPeriod('yesterday')">Yesterday</button>
-                    <button class="btn btn-sm btn-block" onclick="setReportPeriod('week')">Last 7 Days</button>
-                    <button class="btn btn-sm btn-block" onclick="setReportPeriod('month')">Last 30 Days</button>
-                </div>
-                
-                <hr class="divider">
-                
-                <button class="btn btn-primary btn-block" onclick="loadMetrics()">📊 Generate Report</button>
-                <button class="btn btn-success btn-block" onclick="exportToExcel()">📥 Export to Excel</button>
-            </aside>
+            <div class="filter-section">
+                <h4>👤 Filter by Agent</h4>
+                <select id="agentFilter" class="form-select">
+                    <option value="">All Agents</option>
+                    {% for agent in agents %}
+                    <option value="{{ agent.id }}">{{ agent.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             
-            <!-- Main: Metrics Display -->
-            <main class="main-area">
-                <div class="main-header">
-                    <h2>📊 Agent Metrics Report</h2>
-                    <span id="reportPeriodLabel" class="records-count"></span>
-                </div>
-                
-                <!-- Summary Cards -->
-                <div class="metrics-summary" id="metricsSummary">
-                    <div class="metric-card">
-                        <div class="metric-value" id="avgUtilization">--%</div>
-                        <div class="metric-label">Avg Utilization</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value" id="avgAdherence">--%</div>
-                        <div class="metric-label">Avg Adherence</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value" id="avgConformance">--%</div>
-                        <div class="metric-label">Avg Conformance</div>
-                    </div>
-                    <div class="metric-card warning">
-                        <div class="metric-value" id="totalIncidents">--</div>
-                        <div class="metric-label">Total Incidents</div>
-                    </div>
-                    <div class="metric-card danger">
-                        <div class="metric-value" id="totalExceeding">-- min</div>
-                        <div class="metric-label">Exceeding Breaks</div>
-                    </div>
-                    <div class="metric-card emergency">
-                        <div class="metric-value" id="totalEmergency">--</div>
-                        <div class="metric-label">Emergency Breaks</div>
-                    </div>
-                </div>
-                
-                <!-- Metrics Table -->
-                <div class="metrics-container" id="metricsContainer">
-                    <table class="metrics-table">
-                        <thead>
-                            <tr>
-                                <th>Agent Name</th>
-                                <th>Scheduled Hours</th>
-                                <th>Breaks</th>
-                                <th>Break Time</th>
-                                <th>Exceeding</th>
-                                <th>Incidents</th>
-                                <th>Emergency</th>
-                                <th>Utilization</th>
-                                <th>Adherence</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="metricsTableBody">
-                            <tr>
-                                <td colspan="10" class="empty-message">Click "Generate Report" to view metrics</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </main>
-        </div>
+            <div class="filter-section">
+                <h4>☕ Filter by Type</h4>
+                <select id="typeFilter" class="form-select">
+                    <option value="">All Types</option>
+                    {% for key, info in break_types.items() %}
+                    <option value="{{ key }}">{{ info.emoji }} {{ info.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <button class="btn btn-primary btn-block" onclick="loadBreaks()">🔄 Refresh Data</button>
+            
+            <hr class="divider">
+            
+            <div class="filter-section">
+                <h4>⚙️ Agent Management</h4>
+                <button class="btn btn-success btn-block" onclick="showAddAgentModal()">➕ Add New Agent</button>
+                <p class="agent-count">Total: {{ total_agents }} agents</p>
+            </div>
+            
+            <hr class="divider">
+            
+            <div class="filter-section">
+                <h4>📅 Shift Management</h4>
+                <button class="btn btn-primary btn-block" onclick="showShiftModal()">🕐 Manage Shifts (2 Weeks)</button>
+            </div>
+        </aside>
+        
+        <!-- Main: Break Records -->
+        <main class="main-area">
+            <div class="main-header">
+                <h2>📋 Break Records</h2>
+                <span id="recordsCount" class="records-count"></span>
+            </div>
+            
+            <div id="breaksContainer" class="breaks-container">
+                <div class="loading">Loading breaks...</div>
+            </div>
+        </main>
     </div>
 </div>
 
@@ -329,6 +150,73 @@
         </div>
         <div class="modal-body">
             <img id="modalImage" src="" alt="Screenshot" class="modal-image">
+        </div>
+    </div>
+</div>
+
+<!-- Shift Management Modal -->
+<div id="shiftModal" class="modal" style="display: none;">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3>🕐 Shift Management (2 Weeks)</h3>
+            <button class="modal-close" onclick="hideShiftModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="shift-form">
+                <div class="form-group">
+                    <label>📅 Date Range (Start - End)</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="date" id="shiftStartDate" class="form-input">
+                        <span>to</span>
+                        <input type="date" id="shiftEndDate" class="form-input">
+                        <button class="btn btn-sm" onclick="setTwoWeeks()">Set 2 Weeks</button>
+                    </div>
+                    <small style="color: #666;">Select up to 14 days (2 weeks)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>⏰ Shift Time</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="time" id="shiftStartTime" class="form-input" value="08:00">
+                        <span>to</span>
+                        <input type="time" id="shiftEndTime" class="form-input" value="17:00">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Quick Templates</label>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button class="btn btn-sm" onclick="setShiftTemplate('08:00', '17:00')">8 AM - 5 PM</button>
+                        <button class="btn btn-sm" onclick="setShiftTemplate('11:00', '20:00')">11 AM - 8 PM</button>
+                        <button class="btn btn-sm" onclick="setShiftTemplate('13:00', '22:00')">1 PM - 10 PM</button>
+                        <button class="btn btn-sm" onclick="setShiftTemplate('16:00', '01:00')">4 PM - 1 AM</button>
+                        <button class="btn btn-sm" onclick="setShiftTemplate('00:00', '09:00')">12 AM - 9 AM</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>👥 Select Agents</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <button class="btn btn-sm" onclick="selectAllAgents()">Select All</button>
+                        <button class="btn btn-sm" onclick="deselectAllAgents()">Deselect All</button>
+                    </div>
+                    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
+                        {% for agent in agents %}
+                        <label style="display: block; padding: 5px;">
+                            <input type="checkbox" class="agent-checkbox" value="{{ agent.id }}" checked>
+                            {{ agent.full_name }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <p id="shiftError" class="error-message"></p>
+                <p id="shiftSuccess" class="success-message" style="display: none;"></p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="hideShiftModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveBulkShifts()">✅ Save Shifts for Selected Period</button>
         </div>
     </div>
 </div>
