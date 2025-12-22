@@ -24,7 +24,8 @@
                     <!-- Status -->
                     <div class="status-box {% if active_break %}status-on-break{% else %}status-at-work{% endif %}" id="statusBox">
                         {% if active_break %}
-                            <span id="statusText">⏳ On Break (<span id="elapsedTime">{{ active_break.get_elapsed_minutes() }}</span> min)</span>
+                            <span id="statusText">⏳ On {{ active_break.get_break_info().name }} (<span id="elapsedTime">{{ active_break.get_elapsed_minutes() }}</span> min)</span>
+                            <p class="status-hint">Started at {{ active_break.start_time.strftime('%I:%M %p') }} • Allowed: {{ active_break.get_allowed_duration() }} min</p>
                         {% else %}
                             <span id="statusText">🟢 Status: At Work</span>
                         {% endif %}
@@ -119,7 +120,9 @@
         activeBreakId: {% if active_break %}{{ active_break.id }}{% else %}null{% endif %},
         activeBreakStart: {% if active_break %}"{{ active_break.start_time.isoformat() }}"{% else %}null{% endif %},
         activeBreakType: {% if active_break %}"{{ active_break.break_type }}"{% else %}null{% endif %},
-        breakInfo: {{ break_types|tojson }}
+        activeBreakAllowedDuration: {% if active_break %}{{ active_break.get_allowed_duration() }}{% else %}null{% endif %},
+        breakInfo: {{ break_types|tojson }},
+        breakDurations: {{ break_durations|tojson }}
     };
 </script>
 {% endblock %}

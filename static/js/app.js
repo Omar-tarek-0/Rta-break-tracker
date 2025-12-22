@@ -212,6 +212,22 @@ function updateElapsedTime() {
     if (elapsedSpan) {
         elapsedSpan.textContent = elapsed;
     }
+    
+    // Update status box to show if overdue
+    const statusBox = document.getElementById('statusBox');
+    if (statusBox && window.agentData.activeBreakType && window.agentData.breakDurations) {
+        const allowedDuration = window.agentData.activeBreakAllowedDuration || 
+                               window.agentData.breakDurations[window.agentData.activeBreakType] || 15;
+        const isOverdue = elapsed > allowedDuration;
+        
+        if (isOverdue) {
+            statusBox.classList.add('status-overdue');
+            statusBox.classList.remove('status-on-break');
+        } else {
+            statusBox.classList.remove('status-overdue');
+            statusBox.classList.add('status-on-break');
+        }
+    }
 }
 
 function showMessage(text, isError) {
