@@ -747,11 +747,21 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     for b in actual_breaks:
         break_counts[b.break_type] = break_counts.get(b.break_type, 0) + 1
     
-    # Calculate utilization (time worked / scheduled time)
-    # Time worked = scheduled time - break time taken
-    if total_scheduled_minutes > 0:
-        time_worked = total_scheduled_minutes - total_break_minutes
-        utilization = (time_worked / total_scheduled_minutes) * 100
+    # Calculate utilization based on 8 working hours per day
+    # Count working days in the date range
+    start = datetime.strptime(start_date, '%Y-%m-%d').date()
+    end = datetime.strptime(end_date, '%Y-%m-%d').date()
+    working_days = (end - start).days + 1  # Include both start and end dates
+    
+    # Standard working hours: 8 hours per day = 480 minutes per day
+    STANDARD_WORKING_HOURS_PER_DAY = 8
+    STANDARD_WORKING_MINUTES_PER_DAY = STANDARD_WORKING_HOURS_PER_DAY * 60  # 480 minutes
+    total_expected_working_minutes = working_days * STANDARD_WORKING_MINUTES_PER_DAY
+    
+    # Time worked = expected working time - break time taken
+    if total_expected_working_minutes > 0:
+        time_worked = total_expected_working_minutes - total_break_minutes
+        utilization = (time_worked / total_expected_working_minutes) * 100
     else:
         utilization = 0
     
@@ -794,7 +804,7 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         conformance = 0  # No shifts assigned = 0% conformance
     
     return {
-        'total_scheduled_hours': round(total_scheduled_minutes / 60, 2),
+        'total_scheduled_hours': round(total_expected_working_minutes / 60, 2),  # 8 hours per day
         'total_break_minutes': total_break_minutes,
         'total_allowed_break_minutes': total_allowed_break_minutes,
         'exceeding_break_minutes': exceeding_break_minutes,
