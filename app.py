@@ -688,21 +688,24 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         Shift.shift_date <= datetime.strptime(end_date, '%Y-%m-%d').date()
     ).all()
     
-    # Calculate metrics
+    # Filter out punch_in and punch_out from break calculations
+    actual_breaks = [b for b in breaks if b.break_type not in ['punch_in', 'punch_out']]
+    
+    # Calculate metrics (excluding punch_in and punch_out)
     total_scheduled_minutes = sum(s.get_duration_hours() * 60 for s in shifts)
-    total_break_minutes = sum(b.duration_minutes or 0 for b in breaks if b.end_time)
-    total_allowed_break_minutes = sum(b.get_allowed_duration() for b in breaks if b.end_time)
+    total_break_minutes = sum(b.duration_minutes or 0 for b in actual_breaks if b.end_time)
+    total_allowed_break_minutes = sum(b.get_allowed_duration() for b in actual_breaks if b.end_time)
     exceeding_break_minutes = max(0, total_break_minutes - total_allowed_break_minutes)
     
-    # Count incidents (overdue breaks)
-    incidents = sum(1 for b in breaks if b.is_overdue)
+    # Count incidents (overdue breaks, excluding punch_in/punch_out)
+    incidents = sum(1 for b in actual_breaks if b.is_overdue)
     
     # Count emergency breaks
-    emergency_count = sum(1 for b in breaks if b.break_type == 'emergency')
+    emergency_count = sum(1 for b in actual_breaks if b.break_type == 'emergency')
     
-    # Count breaks by type
+    # Count breaks by type (excluding punch_in/punch_out)
     break_counts = {}
-    for b in breaks:
+    for b in actual_breaks:
         break_counts[b.break_type] = break_counts.get(b.break_type, 0) + 1
     
     # Calculate utilization (time worked / scheduled time)
@@ -714,13 +717,14 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         utilization = 0
     
     # Calculate adherence based on actual duration vs allowed duration for each break
+    # Exclude punch_in and punch_out from adherence calculation
     # For each break: adherence = min(actual_duration, allowed_duration) / allowed_duration
     # Then average all break adherence percentages
-    total_completed_breaks = len([b for b in breaks if b.end_time])
+    total_completed_breaks = len([b for b in actual_breaks if b.end_time])
     
     if total_completed_breaks > 0:
         break_adherence_scores = []
-        for b in breaks:
+        for b in actual_breaks:
             if b.end_time and b.duration_minutes is not None:
                 allowed_duration = b.get_allowed_duration()
                 if allowed_duration > 0:
@@ -757,7 +761,7 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         'exceeding_break_minutes': exceeding_break_minutes,
         'incidents': incidents,
         'emergency_count': emergency_count,
-        'total_breaks': len(breaks),
+        'total_breaks': len(actual_breaks),
         'completed_breaks': total_completed_breaks,
         'utilization': round(utilization, 1),
         'adherence': round(adherence, 1),
