@@ -24,14 +24,19 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'rta-break-tracker-dev-key-change-in-p
 
 # Database Configuration
 # Use PostgreSQL in production, SQLite in development
-DATABASE_URL = os.environ.get('DATABASE_URL')
+# Prefer private endpoint to avoid egress fees on Railway
+DATABASE_PRIVATE_URL = os.environ.get('DATABASE_PRIVATE_URL')  # Private endpoint (no fees)
+DATABASE_URL = os.environ.get('DATABASE_URL')  # Public endpoint (may incur fees)
 
-if DATABASE_URL:
+# Use private endpoint if available (Railway), otherwise fall back to public
+database_uri = DATABASE_PRIVATE_URL or DATABASE_URL
+
+if database_uri:
     # Production: Use PostgreSQL
     # Fix Heroku/Railway postgres:// to postgresql://
-    if DATABASE_URL.startswith('postgres://'):
-        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-    SQLALCHEMY_DATABASE_URI = DATABASE_URL
+    if database_uri.startswith('postgres://'):
+        database_uri = database_uri.replace('postgres://', 'postgresql://', 1)
+    SQLALCHEMY_DATABASE_URI = database_uri
 else:
     # Development: Use SQLite
     DATABASE_PATH = BASE_DIR / 'data' / 'database.db'
