@@ -8,18 +8,6 @@
     <header class="header">
         <div class="header-left">
             <h1>🖥️ RTA Break Tracker</h1>
-            {% if today_shift %}
-            <div class="shift-badge">
-                <span class="shift-icon">📅</span>
-                <span class="shift-time">{{ today_shift.start_time.strftime('%I:%M %p') }} - {{ today_shift.end_time.strftime('%I:%M %p') }}</span>
-                <span class="shift-hours">({{ "%.1f"|format(today_shift.get_duration_hours()) }}h)</span>
-            </div>
-            {% else %}
-            <div class="shift-badge no-shift">
-                <span class="shift-icon">⚠️</span>
-                <span>No shift assigned today</span>
-            </div>
-            {% endif %}
         </div>
         <div class="header-right">
             <span class="user-info">👤 {{ user.full_name }}</span>
@@ -33,69 +21,30 @@
             <!-- Left Panel: Break Actions -->
             <div class="panel panel-main">
                 <div class="panel-content">
-                    <!-- Status Box -->
-                    {% if punch_status == 'not_punched_in' %}
-                    <div class="status-box status-not-punched" id="statusBox">
-                        <span id="statusText">🔴 Not Punched In</span>
-                        <p class="status-hint">Please punch in to start your day</p>
-                    </div>
-                    {% elif punch_status == 'punched_out' %}
-                    <div class="status-box status-punched-out" id="statusBox">
-                        <span id="statusText">🏁 Punched Out</span>
-                        <p class="status-hint">You have ended your shift for today</p>
-                    </div>
-                    {% elif active_break %}
-                    <div class="status-box status-on-break" id="statusBox">
-                        <span id="statusText">⏳ On {{ active_break.get_break_info().name }} (<span id="elapsedTime">{{ active_break.get_elapsed_minutes() }}</span> min)</span>
-                    </div>
-                    {% else %}
-                    <div class="status-box status-at-work" id="statusBox">
-                        <span id="statusText">🟢 Working</span>
-                        <p class="status-hint">Punched in at {{ punch_in_time.strftime('%I:%M %p') }}</p>
-                    </div>
-                    {% endif %}
-                    
-                    <!-- NOT PUNCHED IN: Only show Punch In button -->
-                    {% if punch_status == 'not_punched_in' %}
-                    <h3>Start Your Day:</h3>
-                    <div class="punch-section">
-                        <button type="button" class="break-type-btn punch-btn selected" 
-                                data-type="punch_in"
-                                style="--break-color: #4caf50">
-                            <span class="emoji">🟢</span>
-                            <span class="name">Punch In</span>
-                            <span class="duration">Start Shift</span>
-                        </button>
+                    <!-- Status -->
+                    <div class="status-box {% if active_break %}status-on-break{% else %}status-at-work{% endif %}" id="statusBox">
+                        {% if active_break %}
+                            <span id="statusText">⏳ On Break (<span id="elapsedTime">{{ active_break.get_elapsed_minutes() }}</span> min)</span>
+                        {% else %}
+                            <span id="statusText">🟢 Status: At Work</span>
+                        {% endif %}
                     </div>
                     
-                    {% elif punch_status == 'punched_out' %}
-                    <!-- PUNCHED OUT: Show message, no buttons -->
-                    <div class="punched-out-message">
-                        <h3>✅ Shift Complete</h3>
-                        <p>You punched out at {{ punch_out_time.strftime('%I:%M %p') }}</p>
-                        <p class="hint">See you tomorrow!</p>
-                    </div>
-                    
-                    {% else %}
-                    <!-- PUNCHED IN: Show all aux options -->
+                    <!-- Break Type Selection -->
                     <h3>Select Break Type:</h3>
                     <div class="break-types" id="breakTypes">
                         {% for key, info in break_types.items() %}
-                            {% if key != 'punch_in' %}
-                            <button type="button" class="break-type-btn {% if active_break %}disabled{% endif %} {% if key == 'punch_out' %}punch-out-btn{% endif %}" 
-                                    data-type="{{ key }}"
-                                    style="--break-color: {{ info.color }}">
-                                <span class="emoji">{{ info.emoji }}</span>
-                                <span class="name">{{ info.name }}</span>
-                                <span class="duration">{% if break_durations[key] > 0 %}({{ break_durations[key] }} min){% else %}End Shift{% endif %}</span>
-                            </button>
-                            {% endif %}
+                        <button type="button" class="break-type-btn {% if active_break %}disabled{% endif %}" 
+                                data-type="{{ key }}"
+                                style="--break-color: {{ info.color }}">
+                            <span class="emoji">{{ info.emoji }}</span>
+                            <span class="name">{{ info.name }}</span>
+                            <span class="duration">({{ break_durations[key] }} min)</span>
+                        </button>
                         {% endfor %}
                     </div>
-                    {% endif %}
                     
-                    <!-- Screenshot Upload (only if not punched out) -->
-                    {% if punch_status != 'punched_out' %}
+                    <!-- Screenshot Upload -->
                     <h3>Upload Screenshot:</h3>
                     <div class="upload-area" id="uploadArea">
                         <div class="upload-content">
@@ -114,9 +63,7 @@
                     
                     <!-- Submit Button -->
                     <button type="button" class="btn btn-primary btn-block btn-large" id="submitBtn" disabled>
-                        {% if punch_status == 'not_punched_in' %}
-                            🟢 Punch In
-                        {% elif active_break %}
+                        {% if active_break %}
                             🏁 Submit Break End
                         {% else %}
                             🚀 Submit Break Start
@@ -124,7 +71,6 @@
                     </button>
                     
                     <p class="message" id="message"></p>
-                    {% endif %}
                 </div>
             </div>
             
@@ -138,15 +84,17 @@
                     <div class="break-history" id="breakHistory">
                         {% if today_breaks %}
                             {% for br in today_breaks %}
-                            <div class="history-card {% if br.break_type == 'punch_in' %}punch-in{% elif br.break_type == 'punch_out' %}punch-out{% elif br.is_active() %}active{% elif br.is_overdue %}overdue{% else %}completed{% endif %}">
+                            <div class="history-card {% if br.is_active() %}active{% elif br.is_overdue %}overdue{% else %}completed{% endif %}">
                                 <div class="history-info">
-                                    <span class="history-type">{{ br.get_break_info().emoji }} {{ br.get_break_info().name }}</span>
-                                    <span class="history-time">{{ br.start_time.strftime('%I:%M %p') }}</span>
+                                    <span class="history-type">{{ br.get_break_info().emoji }} {{ br.start_time.strftime('%I:%M %p') }}</span>
+                                    {% if br.end_time %}
+                                        <span> → {{ br.end_time.strftime('%I:%M %p') }}</span>
+                                    {% else %}
+                                        <span> → ⏳ On Break...</span>
+                                    {% endif %}
                                 </div>
                                 <div class="history-status">
-                                    {% if br.break_type in ['punch_in', 'punch_out'] %}
-                                        ✅
-                                    {% elif br.is_active() %}
+                                    {% if br.is_active() %}
                                         ({{ br.get_elapsed_minutes() }} min elapsed)
                                     {% elif br.is_overdue %}
                                         ({{ br.duration_minutes }} min) ⚠️
@@ -157,7 +105,7 @@
                             </div>
                             {% endfor %}
                         {% else %}
-                            <p class="empty-message">No activity recorded today</p>
+                            <p class="empty-message">No breaks recorded today</p>
                         {% endif %}
                     </div>
                 </div>
@@ -171,11 +119,7 @@
     window.agentData = {
         hasActiveBreak: {% if active_break %}true{% else %}false{% endif %},
         activeBreakId: {% if active_break %}{{ active_break.id }}{% else %}null{% endif %},
-        activeBreakStart: {% if active_break %}"{{ active_break.start_time.isoformat() }}"{% else %}null{% endif %},
-        activeBreakType: {% if active_break %}"{{ active_break.break_type }}"{% else %}null{% endif %},
-        punchStatus: "{{ punch_status }}",
-        breakInfo: {{ break_types|tojson }}
+        activeBreakStart: {% if active_break %}"{{ active_break.start_time.isoformat() }}"{% else %}null{% endif %}
     };
 </script>
 {% endblock %}
-

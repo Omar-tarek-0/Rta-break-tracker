@@ -286,44 +286,10 @@ def agent_view():
         db.func.date(BreakRecord.start_time) == today
     ).order_by(BreakRecord.start_time.desc()).all()
     
-    # Get today's shift for this agent
-    today_shift = Shift.query.filter_by(
-        agent_id=current_user.id,
-        shift_date=today
-    ).first()
-    
-    # Check punch in/out status for today
-    punch_in = BreakRecord.query.filter(
-        BreakRecord.agent_id == current_user.id,
-        BreakRecord.break_type == 'punch_in',
-        db.func.date(BreakRecord.start_time) == today
-    ).first()
-    
-    punch_out = BreakRecord.query.filter(
-        BreakRecord.agent_id == current_user.id,
-        BreakRecord.break_type == 'punch_out',
-        db.func.date(BreakRecord.start_time) == today
-    ).first()
-    
-    # Determine agent status
-    # not_punched_in: hasn't punched in yet today
-    # punched_in: punched in but not out
-    # punched_out: already punched out for the day
-    if not punch_in:
-        punch_status = 'not_punched_in'
-    elif punch_out:
-        punch_status = 'punched_out'
-    else:
-        punch_status = 'punched_in'
-    
     return render_template('agent.html',
         user=current_user,
         active_break=active_break,
         today_breaks=today_breaks,
-        today_shift=today_shift,
-        punch_status=punch_status,
-        punch_in_time=punch_in.start_time if punch_in else None,
-        punch_out_time=punch_out.start_time if punch_out else None,
         break_types=BREAK_INFO,
         break_durations=BREAK_DURATIONS
     )
@@ -421,6 +387,11 @@ def start_break():
     if current_user.is_rtm():
         return jsonify({'error': 'RTM cannot take breaks'}), 403
     
+    # Check for active break
+    active = BreakRecord.query.filter_by(agent_id=current_user.id, end_time=None).first()
+    if active:
+        return jsonify({'error': 'You already have an active break'}), 400
+    
     break_type = request.form.get('break_type')
     screenshot = request.files.get('screenshot')
     
@@ -430,106 +401,24 @@ def start_break():
     if not screenshot:
         return jsonify({'error': 'Screenshot is required'}), 400
     
-    # Check punch status for non-punch actions
-    if break_type not in ['punch_in', 'punch_out']:
-        # Check if punched in
-        today = get_local_time().date()
-        punch_in = BreakRecord.query.filter(
-            BreakRecord.agent_id == current_user.id,
-            BreakRecord.break_type == 'punch_in',
-            db.func.date(BreakRecord.start_time) == today
-        ).first()
-        
-        if not punch_in:
-            return jsonify({'error': 'Please punch in first to start your day'}), 400
-        
-        # Check if already punched out
-        punch_out = BreakRecord.query.filter(
-            BreakRecord.agent_id == current_user.id,
-            BreakRecord.break_type == 'punch_out',
-            db.func.date(BreakRecord.start_time) == today
-        ).first()
-        
-        if punch_out:
-            return jsonify({'error': 'You have already punched out for today'}), 400
-        
-        # Check for active break
-        active = BreakRecord.query.filter_by(agent_id=current_user.id, end_time=None).first()
-        if active:
-            return jsonify({'error': 'You already have an active break'}), 400
-    
-    # For punch_in, check if already punched in today
-    if break_type == 'punch_in':
-        today = get_local_time().date()
-        existing_punch = BreakRecord.query.filter(
-            BreakRecord.agent_id == current_user.id,
-            BreakRecord.break_type == 'punch_in',
-            db.func.date(BreakRecord.start_time) == today
-        ).first()
-        if existing_punch:
-            return jsonify({'error': 'You have already punched in today'}), 400
-    
-    # For punch_out, check if punched in and not already punched out
-    if break_type == 'punch_out':
-        today = get_local_time().date()
-        punch_in = BreakRecord.query.filter(
-            BreakRecord.agent_id == current_user.id,
-            BreakRecord.break_type == 'punch_in',
-            db.func.date(BreakRecord.start_time) == today
-        ).first()
-        if not punch_in:
-            return jsonify({'error': 'Please punch in first'}), 400
-        
-        punch_out = BreakRecord.query.filter(
-            BreakRecord.agent_id == current_user.id,
-            BreakRecord.break_type == 'punch_out',
-            db.func.date(BreakRecord.start_time) == today
-        ).first()
-        if punch_out:
-            return jsonify({'error': 'You have already punched out today'}), 400
-        
-        # Check for active break - must end it before punching out
-        active = BreakRecord.query.filter_by(agent_id=current_user.id, end_time=None).first()
-        if active and active.break_type not in ['punch_in', 'punch_out']:
-            return jsonify({'error': 'Please end your current break before punching out'}), 400
-    
     # Save screenshot
     screenshot_path = save_screenshot(screenshot)
     if not screenshot_path:
         return jsonify({'error': 'Invalid screenshot file'}), 400
     
-    # Get current time
-    now = get_local_time().replace(tzinfo=None)
-    
     # Create break record
     break_record = BreakRecord(
         agent_id=current_user.id,
         break_type=break_type,
-        start_time=now,
+        start_time=get_local_time().replace(tzinfo=None),
         start_screenshot=screenshot_path
     )
-    
-    # For punch_in and punch_out, auto-complete immediately (single screenshot)
-    if break_type in ['punch_in', 'punch_out']:
-        break_record.end_time = now
-        break_record.end_screenshot = screenshot_path  # Use same screenshot
-        break_record.duration_minutes = 0
-        break_record.is_overdue = False
-    
     db.session.add(break_record)
     db.session.commit()
     
-    # Return appropriate message
-    if break_type == 'punch_in':
-        message = 'Punched in successfully! You can now take breaks.'
-    elif break_type == 'punch_out':
-        message = 'Punched out successfully! Have a great day!'
-    else:
-        message = f'{BREAK_INFO[break_type]["name"]} started! Return within {BREAK_DURATIONS[break_type]} minutes'
-    
     return jsonify({
         'success': True,
-        'message': message,
+        'message': f'Break started! Return within {BREAK_DURATIONS[break_type]} minutes',
         'break': break_record.to_dict()
     })
 
@@ -803,19 +692,15 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     else:
         utilization = 0
     
-    # Calculate adherence based on:
-    # 1. Break durations (actual vs allowed)
-    # 2. Punch in time vs shift start time
-    # 3. Punch out time vs shift end time
-    
-    adherence_scores = []
-    
-    # 1. Break duration adherence
-    total_completed_breaks = len([b for b in breaks if b.end_time and b.break_type not in ['punch_in', 'punch_out']])
+    # Calculate adherence based on actual duration vs allowed duration for each break
+    # For each break: adherence = min(actual_duration, allowed_duration) / allowed_duration
+    # Then average all break adherence percentages
+    total_completed_breaks = len([b for b in breaks if b.end_time])
     
     if total_completed_breaks > 0:
+        break_adherence_scores = []
         for b in breaks:
-            if b.end_time and b.duration_minutes is not None and b.break_type not in ['punch_in', 'punch_out']:
+            if b.end_time and b.duration_minutes is not None:
                 allowed_duration = b.get_allowed_duration()
                 if allowed_duration > 0:
                     # Calculate adherence for this break
@@ -828,83 +713,14 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
                         # Penalty: adherence decreases when exceeding allowed time
                         # Formula: (allowed_duration / actual_duration) * 100
                         break_adherence = (allowed_duration / actual_duration) * 100
-                    adherence_scores.append(break_adherence)
-    
-    # 2. Punch in/out adherence based on shift times
-    # Group shifts by date for easier lookup
-    shifts_by_date = {s.shift_date: s for s in shifts}
-    
-    # Group punch in/out by date
-    punch_records_by_date = {}
-    for b in breaks:
-        if b.break_type in ['punch_in', 'punch_out'] and b.start_time:
-            punch_date = b.start_time.date()
-            if punch_date not in punch_records_by_date:
-                punch_records_by_date[punch_date] = {}
-            punch_records_by_date[punch_date][b.break_type] = b
-    
-    # Calculate punch in/out adherence for each day with a shift
-    for shift_date, shift in shifts_by_date.items():
-        punch_records = punch_records_by_date.get(shift_date, {})
+                    break_adherence_scores.append(break_adherence)
         
-        # Punch in adherence
-        if 'punch_in' in punch_records:
-            punch_in = punch_records['punch_in']
-            punch_in_time = punch_in.start_time.time()
-            shift_start_time = shift.start_time
-            
-            # Calculate difference in minutes
-            punch_in_datetime = datetime.combine(shift_date, punch_in_time)
-            shift_start_datetime = datetime.combine(shift_date, shift_start_time)
-            
-            # Allow 5 minutes grace period (early or late)
-            time_diff_minutes = abs((punch_in_datetime - shift_start_datetime).total_seconds() / 60)
-            
-            if time_diff_minutes <= 5:
-                punch_in_adherence = 100.0
-            else:
-                # Penalty: decrease adherence for being late/early
-                # Max penalty at 30 minutes = 0% adherence
-                # Formula: max(0, (30 - time_diff) / 30 * 100)
-                punch_in_adherence = max(0, (30 - time_diff_minutes) / 30 * 100)
-            adherence_scores.append(punch_in_adherence)
+        if break_adherence_scores:
+            adherence = sum(break_adherence_scores) / len(break_adherence_scores)
         else:
-            # No punch in = 0% adherence for that day
-            adherence_scores.append(0.0)
-        
-        # Punch out adherence
-        if 'punch_out' in punch_records:
-            punch_out = punch_records['punch_out']
-            punch_out_time = punch_out.start_time.time()
-            shift_end_time = shift.end_time
-            
-            # Calculate difference in minutes
-            punch_out_datetime = datetime.combine(shift_date, punch_out_time)
-            shift_end_datetime = datetime.combine(shift_date, shift_end_time)
-            
-            # Handle overnight shifts
-            if shift_end_time < shift.start_time:
-                shift_end_datetime += timedelta(days=1)
-            
-            # Allow 5 minutes grace period (early or late)
-            time_diff_minutes = abs((punch_out_datetime - shift_end_datetime).total_seconds() / 60)
-            
-            if time_diff_minutes <= 5:
-                punch_out_adherence = 100.0
-            else:
-                # Penalty: decrease adherence for being late/early
-                # Max penalty at 30 minutes = 0% adherence
-                punch_out_adherence = max(0, (30 - time_diff_minutes) / 30 * 100)
-            adherence_scores.append(punch_out_adherence)
-        else:
-            # No punch out = 0% adherence for that day
-            adherence_scores.append(0.0)
-    
-    # Calculate overall adherence as average of all scores
-    if adherence_scores:
-        adherence = sum(adherence_scores) / len(adherence_scores)
+            adherence = 100  # No completed breaks with duration
     else:
-        adherence = 100  # No data = 100% adherence (default)
+        adherence = 100  # No breaks = 100% adherence
     
     # Conformance (similar to adherence but measures schedule following)
     # For simplicity: conformance = did agent have shifts and follow them
