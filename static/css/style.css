@@ -569,6 +569,127 @@ body {
     border: 2px dashed rgba(102, 126, 234, 0.4);
 }
 
+/* ==================== SHIFT SCHEDULE ==================== */
+
+.shift-schedule {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 500px;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+.shift-schedule::-webkit-scrollbar {
+    width: 6px;
+}
+
+.shift-schedule::-webkit-scrollbar-track {
+    background: var(--surface-light);
+    border-radius: 3px;
+}
+
+.shift-schedule::-webkit-scrollbar-thumb {
+    background: rgba(102, 126, 234, 0.3);
+    border-radius: 3px;
+}
+
+.shift-schedule::-webkit-scrollbar-thumb:hover {
+    background: rgba(102, 126, 234, 0.5);
+}
+
+.shift-day {
+    background: var(--surface);
+    padding: 12px 15px;
+    border-radius: 8px;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+.shift-day:hover {
+    border-color: rgba(102, 126, 234, 0.4);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+    transform: translateX(2px);
+}
+
+.shift-day.shift-today {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%);
+    border: 2px solid rgba(102, 126, 234, 0.5);
+    font-weight: 600;
+}
+
+.shift-day.shift-assigned {
+    border-left: 3px solid var(--success);
+}
+
+.shift-day.shift-empty {
+    opacity: 0.6;
+}
+
+.shift-date {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 100px;
+}
+
+.shift-day-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    min-width: 35px;
+}
+
+.shift-day-number {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.shift-month {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.shift-time {
+    flex: 1;
+    text-align: right;
+}
+
+.shift-time-range {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    padding: 4px 10px;
+    background: rgba(102, 126, 234, 0.08);
+    border-radius: 6px;
+    display: inline-block;
+}
+
+.shift-time-range.no-shift {
+    background: rgba(0, 0, 0, 0.03);
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.shift-day.shift-today .shift-time-range {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    color: var(--text);
+    font-weight: 600;
+}
+
+.shift-day.shift-assigned .shift-time-range {
+    background: rgba(34, 197, 94, 0.15);
+    color: #16a34a;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
 /* ==================== STATS BAR ==================== */
 
 .stats-bar {

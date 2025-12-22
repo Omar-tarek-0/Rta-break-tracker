@@ -75,7 +75,7 @@
                 </div>
             </div>
             
-            <!-- Right Panel: Today's History -->
+            <!-- Right Panel: Today's History & Schedule -->
             <div class="panel panel-sidebar">
                 <div class="panel-header">
                     <h3>📋 Today's Breaks</h3>
@@ -106,6 +106,37 @@
                         {% else %}
                             <p class="empty-message">No activity recorded today</p>
                         {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Shift Schedule Panel -->
+            <div class="panel panel-sidebar" style="margin-top: 20px;">
+                <div class="panel-header">
+                    <h3>📅 My Schedule (Next 2 Weeks)</h3>
+                </div>
+                <div class="panel-content">
+                    <div class="shift-schedule" id="shiftSchedule">
+                        {% for date_info in schedule_dates %}
+                            {% set check_date = date_info.date %}
+                            {% set shift = date_info.shift %}
+                            <div class="shift-day {% if check_date == today %}shift-today{% elif shift %}shift-assigned{% else %}shift-empty{% endif %}">
+                                <div class="shift-date">
+                                    <span class="shift-day-name">{{ check_date.strftime('%a') }}</span>
+                                    <span class="shift-day-number">{{ check_date.strftime('%d') }}</span>
+                                    <span class="shift-month">{{ check_date.strftime('%b') }}</span>
+                                </div>
+                                <div class="shift-time">
+                                    {% if shift %}
+                                        <span class="shift-time-range">{{ shift.start_time.strftime('%I:%M %p') }} - {{ shift.end_time.strftime('%I:%M %p') }}</span>
+                                    {% elif check_date == today %}
+                                        <span class="shift-time-range no-shift">No shift assigned</span>
+                                    {% else %}
+                                        <span class="shift-time-range no-shift">—</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
