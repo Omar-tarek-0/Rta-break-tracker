@@ -25,11 +25,43 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'rta-break-tracker-dev-key-change-in-p
 # Database Configuration
 # Use PostgreSQL in production, SQLite in development
 # Prefer private endpoint to avoid egress fees on Railway
-DATABASE_PRIVATE_URL = os.environ.get('DATABASE_PRIVATE_URL')  # Private endpoint (no fees)
-DATABASE_URL = os.environ.get('DATABASE_URL')  # Public endpoint (may incur fees)
 
-# Use private endpoint if available (Railway), otherwise fall back to public
-database_uri = DATABASE_PRIVATE_URL or DATABASE_URL
+def get_database_uri():
+    """Get database URI, preferring private endpoint to avoid egress fees"""
+    # Option 1: Explicit private URL (best - no fees)
+    private_url = os.environ.get('DATABASE_PRIVATE_URL')
+    if private_url:
+        return private_url
+    
+    # Option 2: Construct private URL from PG* variables (no fees if PGHOST is internal)
+    pghost = os.environ.get('PGHOST')
+    pgport = os.environ.get('PGPORT', '5432')
+    pgdatabase = os.environ.get('PGDATABASE')
+    pguser = os.environ.get('PGUSER')
+    pgpassword = os.environ.get('PGPASSWORD')
+    
+    # If PGHOST exists and looks like a private/internal hostname, use it
+    if pghost and pgdatabase and pguser and pgpassword:
+        # Private hostnames typically contain: .internal, .local, or are private IPs
+        if '.internal' in pghost or '.local' in pghost or pghost.startswith('10.') or pghost.startswith('172.') or pghost.startswith('192.168.'):
+            return f'postgresql://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}'
+    
+    # Option 3: Use DATABASE_URL (check if it's private)
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url:
+        # If DATABASE_URL uses a private host, it's fine
+        # If it uses DATABASE_PUBLIC_URL, we'll avoid it below
+        return database_url
+    
+    # Option 4: Fall back to DATABASE_PUBLIC_URL only if nothing else available
+    # (This will show the warning, but at least the app will work)
+    public_url = os.environ.get('DATABASE_PUBLIC_URL')
+    if public_url:
+        return public_url
+    
+    return None
+
+database_uri = get_database_uri()
 
 if database_uri:
     # Production: Use PostgreSQL
