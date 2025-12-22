@@ -117,16 +117,35 @@ function handleFileSelect(file) {
 
 function updateSubmitButton() {
     const btn = document.getElementById('submitBtn');
+    if (!btn) return;
+    
     const hasActiveBreak = window.agentData && window.agentData.hasActiveBreak;
+    const breakInfo = window.agentData && window.agentData.breakInfo;
+    const activeBreakType = window.agentData && window.agentData.activeBreakType;
     
     if (hasActiveBreak) {
-        // End break mode
+        // End break mode - show break name
         btn.disabled = !selectedFile;
-        btn.textContent = '🏁 Submit Break End';
+        if (activeBreakType && breakInfo && breakInfo[activeBreakType]) {
+            const breakName = breakInfo[activeBreakType].name;
+            btn.textContent = `🏁 End ${breakName}`;
+        } else {
+            btn.textContent = '🏁 Submit Break End';
+        }
     } else {
-        // Start break mode
+        // Start break mode - show break name
         btn.disabled = !selectedFile || !selectedBreakType;
-        btn.textContent = '🚀 Submit Break Start';
+        
+        if (selectedBreakType === 'punch_out') {
+            btn.textContent = '🔴 Punch Out';
+        } else if (selectedBreakType === 'punch_in') {
+            btn.textContent = '🟢 Punch In';
+        } else if (selectedBreakType && breakInfo && breakInfo[selectedBreakType]) {
+            const breakName = breakInfo[selectedBreakType].name;
+            btn.textContent = `🚀 Submit ${breakName}`;
+        } else {
+            btn.textContent = '🚀 Submit Break Start';
+        }
     }
 }
 

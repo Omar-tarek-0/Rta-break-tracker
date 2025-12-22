@@ -39,7 +39,7 @@
                                 style="--break-color: {{ info.color }}">
                             <span class="emoji">{{ info.emoji }}</span>
                             <span class="name">{{ info.name }}</span>
-                            <span class="duration">({{ break_durations[key] }} min)</span>
+                            <span class="duration">{% if break_durations[key] > 0 %}({{ break_durations[key] }} min){% else %}(Instant){% endif %}</span>
                         </button>
                         {% endfor %}
                     </div>
@@ -84,17 +84,15 @@
                     <div class="break-history" id="breakHistory">
                         {% if today_breaks %}
                             {% for br in today_breaks %}
-                            <div class="history-card {% if br.is_active() %}active{% elif br.is_overdue %}overdue{% else %}completed{% endif %}">
+                            <div class="history-card {% if br.break_type == 'punch_in' %}punch-in{% elif br.break_type == 'punch_out' %}punch-out{% elif br.is_active() %}active{% elif br.is_overdue %}overdue{% else %}completed{% endif %}">
                                 <div class="history-info">
-                                    <span class="history-type">{{ br.get_break_info().emoji }} {{ br.start_time.strftime('%I:%M %p') }}</span>
-                                    {% if br.end_time %}
-                                        <span> → {{ br.end_time.strftime('%I:%M %p') }}</span>
-                                    {% else %}
-                                        <span> → ⏳ On Break...</span>
-                                    {% endif %}
+                                    <span class="history-type">{{ br.get_break_info().emoji }} {{ br.get_break_info().name }}</span>
+                                    <span class="history-time">{{ br.start_time.strftime('%I:%M %p') }}</span>
                                 </div>
                                 <div class="history-status">
-                                    {% if br.is_active() %}
+                                    {% if br.break_type in ['punch_in', 'punch_out'] %}
+                                        ✅
+                                    {% elif br.is_active() %}
                                         ({{ br.get_elapsed_minutes() }} min elapsed)
                                     {% elif br.is_overdue %}
                                         ({{ br.duration_minutes }} min) ⚠️
@@ -105,7 +103,7 @@
                             </div>
                             {% endfor %}
                         {% else %}
-                            <p class="empty-message">No breaks recorded today</p>
+                            <p class="empty-message">No activity recorded today</p>
                         {% endif %}
                     </div>
                 </div>
@@ -119,7 +117,9 @@
     window.agentData = {
         hasActiveBreak: {% if active_break %}true{% else %}false{% endif %},
         activeBreakId: {% if active_break %}{{ active_break.id }}{% else %}null{% endif %},
-        activeBreakStart: {% if active_break %}"{{ active_break.start_time.isoformat() }}"{% else %}null{% endif %}
+        activeBreakStart: {% if active_break %}"{{ active_break.start_time.isoformat() }}"{% else %}null{% endif %},
+        activeBreakType: {% if active_break %}"{{ active_break.break_type }}"{% else %}null{% endif %},
+        breakInfo: {{ break_types|tojson }}
     };
 </script>
 {% endblock %}
