@@ -34,29 +34,38 @@ def get_database_uri():
         return private_url
     
     # Option 2: Construct private URL from PG* variables (no fees if PGHOST is internal)
+    # This is the PRIMARY method for Railway PostgreSQL
     pghost = os.environ.get('PGHOST')
     pgport = os.environ.get('PGPORT', '5432')
     pgdatabase = os.environ.get('PGDATABASE')
     pguser = os.environ.get('PGUSER')
     pgpassword = os.environ.get('PGPASSWORD')
     
-    # If PGHOST exists and looks like a private/internal hostname, use it
+    # If all PG* variables exist, construct connection string (Railway provides these)
     if pghost and pgdatabase and pguser and pgpassword:
-        # Private hostnames typically contain: .internal, .local, or are private IPs
+        # Always use PG* variables if available (Railway provides them)
+        # Check if it's a private/internal hostname
         if '.internal' in pghost or '.local' in pghost or pghost.startswith('10.') or pghost.startswith('172.') or pghost.startswith('192.168.'):
+            # Private endpoint - no fees
+            return f'postgresql://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}'
+        else:
+            # Public endpoint but still use it (better than SQLite)
             return f'postgresql://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}'
     
-    # Option 3: Use DATABASE_URL (check if it's private)
+    # Option 3: Use DATABASE_URL (Railway's standard variable)
     database_url = os.environ.get('DATABASE_URL')
     if database_url:
-        # If DATABASE_URL uses a private host, it's fine
-        # If it uses DATABASE_PUBLIC_URL, we'll avoid it below
+        # Fix postgres:// to postgresql:// if needed
+        if database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
         return database_url
     
     # Option 4: Fall back to DATABASE_PUBLIC_URL only if nothing else available
     # (This will show the warning, but at least the app will work)
     public_url = os.environ.get('DATABASE_PUBLIC_URL')
     if public_url:
+        if public_url.startswith('postgres://'):
+            public_url = public_url.replace('postgres://', 'postgresql://', 1)
         return public_url
     
     return None
