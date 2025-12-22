@@ -8,11 +8,17 @@ let selectedBreakType = null;
 let selectedFile = null;
 
 // Initialize agent view
-if (document.getElementById('breakTypes')) {
+if (document.getElementById('breakTypes') || document.querySelector('.punch-section')) {
     initAgentView();
 }
 
 function initAgentView() {
+    // Check if we're in punch-in mode (pre-select punch_in)
+    const punchBtn = document.querySelector('.punch-section .punch-btn');
+    if (punchBtn && window.agentData && window.agentData.punchStatus === 'not_punched_in') {
+        selectedBreakType = 'punch_in';
+    }
+    
     // Break type selection
     document.querySelectorAll('.break-type-btn').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -117,16 +123,38 @@ function handleFileSelect(file) {
 
 function updateSubmitButton() {
     const btn = document.getElementById('submitBtn');
-    const hasActiveBreak = window.agentData && window.agentData.hasActiveBreak;
+    if (!btn) return;
     
-    if (hasActiveBreak) {
-        // End break mode
+    const hasActiveBreak = window.agentData && window.agentData.hasActiveBreak;
+    const punchStatus = window.agentData && window.agentData.punchStatus;
+    const breakInfo = window.agentData && window.agentData.breakInfo;
+    const activeBreakType = window.agentData && window.agentData.activeBreakType;
+    
+    if (punchStatus === 'not_punched_in') {
+        // Punch in mode
         btn.disabled = !selectedFile;
-        btn.textContent = '🏁 Submit Break End';
+        btn.textContent = '🟢 Punch In';
+    } else if (hasActiveBreak) {
+        // End break mode - show break name
+        btn.disabled = !selectedFile;
+        if (activeBreakType && breakInfo && breakInfo[activeBreakType]) {
+            const breakName = breakInfo[activeBreakType].name;
+            btn.textContent = `🏁 End ${breakName}`;
+        } else {
+            btn.textContent = '🏁 Submit Break End';
+        }
     } else {
-        // Start break mode
+        // Start break mode - show break name
         btn.disabled = !selectedFile || !selectedBreakType;
-        btn.textContent = '🚀 Submit Break Start';
+        
+        if (selectedBreakType === 'punch_out') {
+            btn.textContent = '🔴 Punch Out';
+        } else if (selectedBreakType && breakInfo && breakInfo[selectedBreakType]) {
+            const breakName = breakInfo[selectedBreakType].name;
+            btn.textContent = `🚀 Submit ${breakName}`;
+        } else {
+            btn.textContent = '🚀 Submit Break Start';
+        }
     }
 }
 
