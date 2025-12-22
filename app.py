@@ -1300,6 +1300,21 @@ def import_backup():
 def create_app():
     """Initialize database - called on startup"""
     with app.app_context():
+        # Check if database has existing data before initializing
+        try:
+            existing_users = User.query.count()
+            existing_breaks = BreakRecord.query.count()
+            existing_shifts = Shift.query.count()
+            
+            print(f"[DATABASE CHECK] Existing data: {existing_users} users, {existing_breaks} breaks, {existing_shifts} shifts")
+            
+            if existing_users == 0 and existing_breaks == 0:
+                print("[DATABASE WARNING] Database appears to be empty!")
+            else:
+                print(f"[DATABASE OK] Database has existing data - safe to proceed")
+        except Exception as e:
+            print(f"[DATABASE ERROR] Could not check existing data: {e}")
+        
         init_db()
     return app
 

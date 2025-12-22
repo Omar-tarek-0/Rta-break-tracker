@@ -63,6 +63,20 @@ def get_database_uri():
 
 database_uri = get_database_uri()
 
+# IMPORTANT: Log database connection for debugging (without password)
+if database_uri:
+    # Mask password in log
+    safe_uri = database_uri
+    if '@' in safe_uri and ':' in safe_uri.split('@')[0]:
+        parts = safe_uri.split('@')
+        user_pass = parts[0].split('://')[1] if '://' in parts[0] else parts[0]
+        if ':' in user_pass:
+            user = user_pass.split(':')[0]
+            safe_uri = safe_uri.replace(user_pass, f'{user}:***', 1)
+    print(f"[DATABASE] Connecting to: {safe_uri.split('@')[0]}@***")
+else:
+    print("[DATABASE] WARNING: No database URI found! Using SQLite.")
+
 if database_uri:
     # Production: Use PostgreSQL
     # Fix Heroku/Railway postgres:// to postgresql://
