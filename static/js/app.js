@@ -633,3 +633,151 @@ document.querySelectorAll('.modal').forEach(modal => {
     });
 });
 
+// ==================== TAB NAVIGATION ====================
+
+function switchTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.tab === tabName) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Show/hide tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.style.display = 'none';
+        content.classList.remove('active');
+    });
+    
+    const tabContent = document.getElementById('tab-' + tabName);
+    if (tabContent) {
+        tabContent.style.display = 'block';
+        tabContent.classList.add('active');
+        
+        // Load data when switching to reports tab
+        if (tabName === 'reports') {
+            const today = new Date();
+            document.getElementById('reportStartDate').value = formatDate(today);
+            document.getElementById('reportEndDate').value = formatDate(today);
+        }
+    }
+}
+
+// ==================== REPORTS & METRICS ====================
+
+function setReportPeriod(period) {
+    const today = new Date();
+    let startDate, endDate;
+    
+    if (period === 'today') {
+        startDate = endDate = formatDate(today);
+    } else if (period === 'yesterday') {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        startDate = endDate = formatDate(yesterday);
+    } else if (period === 'week') {
+        const weekAgo = new Date(today);
+        weekAgo.setDate(weekAgo.getDate() - 6);
+        startDate = formatDate(weekAgo);
+        endDate = formatDate(today);
+    } else if (period === 'month') {
+        const monthAgo = new Date(today);
+        monthAgo.setDate(monthAgo.getDate() - 29);
+        startDate = formatDate(monthAgo);
+        endDate = formatDate(today);
+    }
+    
+    document.getElementById('reportStartDate').value = startDate;
+    document.getElementById('reportEndDate').value = endDate;
+    
+    loadMetrics();
+}
+
+async function loadMetrics() {
+    const startDate = document.getElementById('reportStartDate').value;
+    const endDate = document.getElementById('reportEndDate').value;
+    
+    if (!startDate || !endDate) {
+        alert('Please select a date range');
+        return;
+    }
+    
+    const tbody = document.getElementById('metricsTableBody');
+    tbody.innerHTML = '<tr><td colspan="11" class="loading">Loading metrics...</td></tr>';
+    
+    try {
+        const response = await fetch(`/api/report/metrics?start_date=${startDate}&end_date=${endDate}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            tbody.innerHTML = `<tr><td colspan="11" class="error-message">${data.error}</td></tr>`;
+            return;
+        }
+        
+        // Update summary cards
+        document.getElementById('avgUtilization').textContent = data.totals.avg_utilization + '%';
+        document.getElementById('avgAdherence').textContent = data.totals.avg_adherence + '%';
+        document.getElementById('avgConformance').textContent = data.totals.avg_conformance + '%';
+        document.getElementById('totalIncidents').textContent = data.totals.incidents;
+        document.getElementById('totalExceeding').textContent = data.totals.exceeding_break_minutes + ' min';
+        document.getElementById('totalEmergency').textContent = data.totals.emergency_count;
+        document.getElementById('summaryCards').style.display = 'grid';
+        
+        // Populate table
+        if (data.agents.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" class="empty-message">No agents found</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = '';
+        
+        data.agents.forEach(agent => {
+            let statusClass, statusText;
+            
+            if (agent.incidents === 0 && agent.exceeding_break_minutes === 0) {
+                statusClass = 'status-good';
+                statusText = '✅ Good';
+            } else if (agent.incidents <= 2 || agent.exceeding_break_minutes <= 15) {
+                statusClass = 'status-warning';
+                statusText = '⚠️ Warning';
+            } else {
+                statusClass = 'status-bad';
+                statusText = '❌ Review';
+            }
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${agent.agent_name}</td>
+                <td>${agent.total_scheduled_hours}h</td>
+                <td>${agent.total_breaks}</td>
+                <td>${agent.total_break_minutes} min</td>
+                <td>${agent.exceeding_break_minutes} min</td>
+                <td>${agent.incidents}</td>
+                <td>${agent.emergency_count}</td>
+                <td>${agent.utilization}%</td>
+                <td>${agent.adherence}%</td>
+                <td>${agent.conformance}%</td>
+                <td class="${statusClass}">${statusText}</td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="11" class="error-message">Error: ${err.message}</td></tr>`;
+    }
+}
+
+function exportToExcel() {
+    const startDate = document.getElementById('reportStartDate').value;
+    const endDate = document.getElementById('reportEndDate').value;
+    
+    if (!startDate || !endDate) {
+        alert('Please select a date range first');
+        return;
+    }
+    
+    // Trigger download
+    window.location.href = `/api/report/export?start_date=${startDate}&end_date=${endDate}`;
+}
+
