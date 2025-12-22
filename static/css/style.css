@@ -1,8 +1,9 @@
 /* RTA Break Tracker - Web Styles */
 
 :root {
-    --primary: #1a73e8;
-    --primary-hover: #1557b0;
+    --primary: #667eea;
+    --primary-hover: #764ba2;
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     --success: #34a853;
     --warning: #fbbc04;
     --danger: #ea4335;
@@ -22,7 +23,7 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background-color: var(--background);
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
     color: var(--text);
     min-height: 100vh;
 }
@@ -43,7 +44,8 @@ body {
     padding: 40px;
     width: 100%;
     max-width: 400px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+    border: 1px solid rgba(102, 126, 234, 0.2);
 }
 
 .login-header {
@@ -129,11 +131,14 @@ body {
 }
 
 .btn-primary {
-    background: var(--primary);
+    background: var(--primary-gradient);
+    border: none;
 }
 
 .btn-primary:hover {
-    background: var(--primary-hover);
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .btn-success {
@@ -180,7 +185,8 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 15px 25px;
-    background: var(--surface);
+    background: var(--primary-gradient);
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
 }
 
 .header-left {
@@ -217,7 +223,8 @@ body {
 }
 
 .badge-primary {
-    background: var(--primary);
+    background: var(--primary-gradient);
+    color: white;
 }
 
 /* ==================== APP CONTAINER ==================== */
@@ -316,8 +323,10 @@ body {
 }
 
 .break-type-btn.selected {
-    border-color: var(--break-color, var(--primary));
-    background: var(--break-color, var(--primary));
+    border-color: var(--break-color, #667eea);
+    background: var(--break-color, var(--primary-gradient));
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    transform: translateY(-2px);
 }
 
 .break-type-btn.disabled {
@@ -454,6 +463,13 @@ body {
     padding: 15px 30px;
     border-radius: 10px;
     text-align: center;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    transition: all 0.3s;
+}
+
+.stat-card:hover {
+    border-color: rgba(102, 126, 234, 0.5);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
 }
 
 .stat-value {
@@ -877,8 +893,9 @@ body {
 }
 
 .tab-btn.active {
-    color: var(--primary);
-    border-bottom-color: var(--primary);
+    color: #667eea;
+    border-bottom-color: #667eea;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
 }
 
 .tab-content {
@@ -915,6 +932,14 @@ body {
     padding: 15px;
     border-radius: 10px;
     text-align: center;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    transition: all 0.3s;
+}
+
+.summary-card:hover {
+    border-color: rgba(102, 126, 234, 0.5);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    transform: translateY(-2px);
 }
 
 .summary-label {
@@ -926,7 +951,10 @@ body {
 .summary-value {
     font-size: 24px;
     font-weight: 600;
-    color: var(--primary);
+    background: var(--primary-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .metrics-table-container {
