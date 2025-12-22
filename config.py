@@ -33,7 +33,7 @@ def get_database_uri():
     if private_url:
         return private_url
     
-    # Option 2: Construct private URL from PG* variables (no fees if PGHOST is internal)
+    # Option 2: Construct URL from PG* variables (Railway provides these)
     # This is the PRIMARY method for Railway PostgreSQL
     pghost = os.environ.get('PGHOST')
     pgport = os.environ.get('PGPORT', '5432')
@@ -42,15 +42,11 @@ def get_database_uri():
     pgpassword = os.environ.get('PGPASSWORD')
     
     # If all PG* variables exist, construct connection string (Railway provides these)
+    # ALWAYS use PG* variables if available, regardless of public/private
+    # (Better to use public PostgreSQL than SQLite which doesn't persist!)
     if pghost and pgdatabase and pguser and pgpassword:
-        # Always use PG* variables if available (Railway provides them)
-        # Check if it's a private/internal hostname
-        if '.internal' in pghost or '.local' in pghost or pghost.startswith('10.') or pghost.startswith('172.') or pghost.startswith('192.168.'):
-            # Private endpoint - no fees
-            return f'postgresql://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}'
-        else:
-            # Public endpoint but still use it (better than SQLite)
-            return f'postgresql://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}'
+        # Construct PostgreSQL connection string
+        return f'postgresql://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}'
     
     # Option 3: Use DATABASE_URL (Railway's standard variable)
     database_url = os.environ.get('DATABASE_URL')
@@ -75,6 +71,19 @@ database_uri = get_database_uri()
 # IMPORTANT: Log database connection for debugging (without password)
 print("=" * 60)
 print("[DATABASE CONFIG] Checking database connection...")
+
+# Check what environment variables are available
+pghost = os.environ.get('PGHOST')
+pgdatabase = os.environ.get('PGDATABASE')
+database_url = os.environ.get('DATABASE_URL')
+public_url = os.environ.get('DATABASE_PUBLIC_URL')
+
+print(f"[DATABASE CONFIG] Environment variables found:")
+print(f"  - PGHOST: {'✅ Set' if pghost else '❌ Not set'}")
+print(f"  - PGDATABASE: {'✅ Set' if pgdatabase else '❌ Not set'}")
+print(f"  - DATABASE_URL: {'✅ Set' if database_url else '❌ Not set'}")
+print(f"  - DATABASE_PUBLIC_URL: {'✅ Set' if public_url else '❌ Not set'}")
+
 if database_uri:
     # Mask password in log
     safe_uri = database_uri
@@ -90,11 +99,14 @@ if database_uri:
     if '/' in safe_uri:
         db_name = safe_uri.split('/')[-1].split('?')[0]
     
-    print(f"[DATABASE CONFIG] Connection string: {safe_uri.split('@')[0]}@***")
-    print(f"[DATABASE CONFIG] Database name: {db_name}")
-    print(f"[DATABASE CONFIG] Using: {'PostgreSQL (Production)' if 'postgresql' in database_uri else 'SQLite (Development)'}")
+    print(f"[DATABASE CONFIG] ✅ Connection string: {safe_uri.split('@')[0]}@***")
+    print(f"[DATABASE CONFIG] ✅ Database name: {db_name}")
+    print(f"[DATABASE CONFIG] ✅ Using: {'PostgreSQL (Production)' if 'postgresql' in database_uri else 'SQLite (Development)'}")
 else:
-    print("[DATABASE CONFIG] ⚠️  WARNING: No database URI found! Using SQLite.")
+    print("[DATABASE CONFIG] ❌ CRITICAL ERROR: No database URI found!")
+    print("[DATABASE CONFIG] ❌ This will use SQLite, which DOES NOT PERSIST on Railway!")
+    print("[DATABASE CONFIG] ❌ Your data will be LOST on each deployment!")
+    print("[DATABASE CONFIG] ❌ Please check Railway database connection!")
 print("=" * 60)
 
 if database_uri:
