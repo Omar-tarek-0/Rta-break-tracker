@@ -1284,6 +1284,80 @@ body {
     font-weight: 600;
 }
 
+/* ==================== BACKUP & RESTORE ==================== */
+
+.backup-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+}
+
+.backup-card {
+    background: var(--surface);
+    padding: 25px;
+    border-radius: 12px;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.15);
+    transition: all 0.3s;
+}
+
+.backup-card:hover {
+    border-color: rgba(102, 126, 234, 0.5);
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
+    transform: translateY(-2px);
+}
+
+.backup-card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--text);
+}
+
+.backup-card p {
+    color: var(--text-secondary);
+    margin-bottom: 15px;
+    line-height: 1.6;
+}
+
+.backup-card.info {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+    border: 2px solid rgba(102, 126, 234, 0.3);
+}
+
+.backup-card.info h3 {
+    color: var(--text);
+}
+
+.backup-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 10px;
+    font-style: italic;
+}
+
+.backup-hint.warning {
+    color: var(--danger);
+    font-weight: 600;
+    font-style: normal;
+}
+
+.backup-card ol {
+    margin: 15px 0;
+    padding-left: 25px;
+}
+
+.backup-card ol li {
+    margin-bottom: 10px;
+    line-height: 1.6;
+    color: var(--text);
+}
+
+.backup-card ol li strong {
+    color: var(--text);
+}
+
 /* ==================== LOADING ==================== */
 
 .loading {

@@ -12,6 +12,7 @@ import bcrypt
 import os
 import uuid
 import io
+import json
 
 from config import (
     SECRET_KEY, SQLALCHEMY_DATABASE_URI, UPLOAD_FOLDER, 
@@ -1089,6 +1090,192 @@ def export_report():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         headers={'Content-Disposition': f'attachment; filename={filename}'}
     )
+
+
+# ==================== BACKUP & RESTORE ====================
+
+@app.route('/api/backup/export', methods=['GET'])
+@login_required
+def export_backup():
+    """Export all data as JSON backup"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Only RTM can export backups'}), 403
+    
+    try:
+        # Get all users (excluding password hashes for security)
+        users = User.query.all()
+        users_data = []
+        for user in users:
+            users_data.append({
+                'id': user.id,
+                'username': user.username,
+                'full_name': user.full_name,
+                'role': user.role,
+                'created_at': user.created_at.isoformat() if user.created_at else None
+            })
+        
+        # Get all break records
+        breaks = BreakRecord.query.all()
+        breaks_data = []
+        for br in breaks:
+            breaks_data.append({
+                'id': br.id,
+                'agent_id': br.agent_id,
+                'break_type': br.break_type,
+                'start_time': br.start_time.isoformat() if br.start_time else None,
+                'end_time': br.end_time.isoformat() if br.end_time else None,
+                'start_screenshot': br.start_screenshot,
+                'end_screenshot': br.end_screenshot,
+                'duration_minutes': br.duration_minutes,
+                'is_overdue': br.is_overdue,
+                'notes': br.notes,
+                'created_at': br.created_at.isoformat() if br.created_at else None
+            })
+        
+        # Get all shifts
+        shifts = Shift.query.all()
+        shifts_data = []
+        for shift in shifts:
+            shifts_data.append({
+                'id': shift.id,
+                'agent_id': shift.agent_id,
+                'shift_date': shift.shift_date.isoformat() if shift.shift_date else None,
+                'start_time': shift.start_time.isoformat() if shift.start_time else None,
+                'end_time': shift.end_time.isoformat() if shift.end_time else None,
+                'created_by': shift.created_by,
+                'created_at': shift.created_at.isoformat() if shift.created_at else None
+            })
+        
+        # Create backup structure
+        backup_data = {
+            'version': '1.0',
+            'exported_at': get_local_time().isoformat(),
+            'exported_by': current_user.full_name,
+            'data': {
+                'users': users_data,
+                'breaks': breaks_data,
+                'shifts': shifts_data
+            }
+        }
+        
+        # Return as JSON file
+        output = io.BytesIO()
+        output.write(json.dumps(backup_data, indent=2).encode('utf-8'))
+        output.seek(0)
+        
+        filename = f"rta-backup-{get_local_time().strftime('%Y%m%d-%H%M%S')}.json"
+        
+        return Response(
+            output.getvalue(),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/backup/import', methods=['POST'])
+@login_required
+def import_backup():
+    """Import data from JSON backup"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Only RTM can import backups'}), 403
+    
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Read and parse JSON
+        backup_data = json.loads(file.read().decode('utf-8'))
+        
+        if 'data' not in backup_data:
+            return jsonify({'error': 'Invalid backup file format'}), 400
+        
+        data = backup_data['data']
+        
+        # Clear existing data (optional - you might want to keep it)
+        # BreakRecord.query.delete()
+        # Shift.query.delete()
+        # User.query.filter(User.role == ROLE_AGENT).delete()  # Keep RTM users
+        
+        # Restore users (skip if username already exists to avoid conflicts)
+        users_restored = 0
+        if 'users' in data:
+            for user_data in data['users']:
+                # Skip if user already exists
+                existing = User.query.filter_by(username=user_data['username']).first()
+                if not existing:
+                    user = User(
+                        username=user_data['username'],
+                        full_name=user_data['full_name'],
+                        role=user_data['role']
+                    )
+                    # Set a default password (user should change it)
+                    user.set_password('changeme123')
+                    if 'created_at' in user_data and user_data['created_at']:
+                        user.created_at = datetime.fromisoformat(user_data['created_at'].replace('Z', '+00:00'))
+                    db.session.add(user)
+                    users_restored += 1
+        
+        # Restore breaks
+        breaks_restored = 0
+        if 'breaks' in data:
+            for break_data in data['breaks']:
+                # Get agent user
+                agent = User.query.get(break_data['agent_id'])
+                if agent:
+                    br = BreakRecord(
+                        agent_id=break_data['agent_id'],
+                        break_type=break_data['break_type'],
+                        start_screenshot=break_data.get('start_screenshot'),
+                        end_screenshot=break_data.get('end_screenshot'),
+                        duration_minutes=break_data.get('duration_minutes'),
+                        is_overdue=break_data.get('is_overdue', False),
+                        notes=break_data.get('notes')
+                    )
+                    if break_data.get('start_time'):
+                        br.start_time = datetime.fromisoformat(break_data['start_time'].replace('Z', '+00:00'))
+                    if break_data.get('end_time'):
+                        br.end_time = datetime.fromisoformat(break_data['end_time'].replace('Z', '+00:00'))
+                    if break_data.get('created_at'):
+                        br.created_at = datetime.fromisoformat(break_data['created_at'].replace('Z', '+00:00'))
+                    db.session.add(br)
+                    breaks_restored += 1
+        
+        # Restore shifts
+        shifts_restored = 0
+        if 'shifts' in data:
+            for shift_data in data['shifts']:
+                # Get agent user
+                agent = User.query.get(shift_data['agent_id'])
+                if agent:
+                    shift = Shift(
+                        agent_id=shift_data['agent_id'],
+                        shift_date=datetime.fromisoformat(shift_data['shift_date']).date() if shift_data.get('shift_date') else None,
+                        start_time=datetime.fromisoformat(shift_data['start_time']).time() if shift_data.get('start_time') else None,
+                        end_time=datetime.fromisoformat(shift_data['end_time']).time() if shift_data.get('end_time') else None,
+                        created_by=shift_data.get('created_by')
+                    )
+                    if shift_data.get('created_at'):
+                        shift.created_at = datetime.fromisoformat(shift_data['created_at'].replace('Z', '+00:00'))
+                    db.session.add(shift)
+                    shifts_restored += 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Backup restored: {users_restored} users, {breaks_restored} breaks, {shifts_restored} shifts'
+        })
+    except json.JSONDecodeError:
+        return jsonify({'error': 'Invalid JSON file'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 
 # ==================== STARTUP ====================

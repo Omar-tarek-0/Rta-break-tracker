@@ -818,3 +818,67 @@ function exportToExcel() {
     window.location.href = `/api/report/export?start_date=${startDate}&end_date=${endDate}`;
 }
 
+// ==================== BACKUP & RESTORE ====================
+
+async function exportBackup() {
+    try {
+        const response = await fetch('/api/backup/export');
+        if (!response.ok) {
+            throw new Error('Failed to export backup');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `rta-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        alert('✅ Backup exported successfully! Save this file in a safe location.');
+    } catch (err) {
+        alert('❌ Error exporting backup: ' + err.message);
+    }
+}
+
+async function importBackup() {
+    const fileInput = document.getElementById('backupFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        alert('Please select a backup file first');
+        return;
+    }
+    
+    if (!confirm('⚠️ WARNING: This will replace ALL existing data! Are you sure you want to continue?')) {
+        return;
+    }
+    
+    if (!confirm('⚠️ This action cannot be undone. Are you absolutely sure?')) {
+        return;
+    }
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch('/api/backup/import', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Backup restored successfully! The page will reload.');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            alert('❌ Error restoring backup: ' + (data.error || 'Unknown error'));
+        }
+    } catch (err) {
+        alert('❌ Error importing backup: ' + err.message);
+    }
+}
+
