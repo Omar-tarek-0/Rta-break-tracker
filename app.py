@@ -1323,6 +1323,13 @@ def create_app():
                 print("⚠️  This might be a NEW database instance!")
             else:
                 print("✅ [DATABASE OK] Database has existing data - safe to proceed")
+                print(f"✅ [DATA PERSISTENCE TEST] Found {existing_users} user(s) - Data is PERSISTING!")
+                
+                # List user names for verification
+                if existing_users > 0:
+                    users = User.query.all()
+                    user_names = [u.full_name for u in users]
+                    print(f"✅ [USERS LIST] Current users: {', '.join(user_names)}")
         except Exception as e:
             print("=" * 60)
             print(f"❌ [DATABASE ERROR] Could not check existing data:")
