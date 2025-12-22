@@ -64,6 +64,8 @@ def get_database_uri():
 database_uri = get_database_uri()
 
 # IMPORTANT: Log database connection for debugging (without password)
+print("=" * 60)
+print("[DATABASE CONFIG] Checking database connection...")
 if database_uri:
     # Mask password in log
     safe_uri = database_uri
@@ -73,9 +75,18 @@ if database_uri:
         if ':' in user_pass:
             user = user_pass.split(':')[0]
             safe_uri = safe_uri.replace(user_pass, f'{user}:***', 1)
-    print(f"[DATABASE] Connecting to: {safe_uri.split('@')[0]}@***")
+    
+    # Extract database name for logging
+    db_name = "unknown"
+    if '/' in safe_uri:
+        db_name = safe_uri.split('/')[-1].split('?')[0]
+    
+    print(f"[DATABASE CONFIG] Connection string: {safe_uri.split('@')[0]}@***")
+    print(f"[DATABASE CONFIG] Database name: {db_name}")
+    print(f"[DATABASE CONFIG] Using: {'PostgreSQL (Production)' if 'postgresql' in database_uri else 'SQLite (Development)'}")
 else:
-    print("[DATABASE] WARNING: No database URI found! Using SQLite.")
+    print("[DATABASE CONFIG] ⚠️  WARNING: No database URI found! Using SQLite.")
+print("=" * 60)
 
 if database_uri:
     # Production: Use PostgreSQL

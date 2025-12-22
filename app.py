@@ -1299,23 +1299,42 @@ def import_backup():
 
 def create_app():
     """Initialize database - called on startup"""
+    print("=" * 60)
+    print("RTA BREAK TRACKER - STARTING UP")
+    print("=" * 60)
+    
     with app.app_context():
         # Check if database has existing data before initializing
         try:
+            print("[DATABASE] Connecting to database...")
             existing_users = User.query.count()
             existing_breaks = BreakRecord.query.count()
             existing_shifts = Shift.query.count()
             
-            print(f"[DATABASE CHECK] Existing data: {existing_users} users, {existing_breaks} breaks, {existing_shifts} shifts")
+            print("=" * 60)
+            print(f"[DATABASE CHECK] Existing data found:")
+            print(f"  - Users: {existing_users}")
+            print(f"  - Breaks: {existing_breaks}")
+            print(f"  - Shifts: {existing_shifts}")
+            print("=" * 60)
             
             if existing_users == 0 and existing_breaks == 0:
-                print("[DATABASE WARNING] Database appears to be empty!")
+                print("⚠️  [DATABASE WARNING] Database appears to be EMPTY!")
+                print("⚠️  This might be a NEW database instance!")
             else:
-                print(f"[DATABASE OK] Database has existing data - safe to proceed")
+                print("✅ [DATABASE OK] Database has existing data - safe to proceed")
         except Exception as e:
-            print(f"[DATABASE ERROR] Could not check existing data: {e}")
+            print("=" * 60)
+            print(f"❌ [DATABASE ERROR] Could not check existing data:")
+            print(f"   Error: {e}")
+            print("=" * 60)
+            import traceback
+            traceback.print_exc()
         
+        print("[DATABASE] Initializing database schema...")
         init_db()
+        print("[DATABASE] Database initialization complete!")
+        print("=" * 60)
     return app
 
 # Initialize on import (for gunicorn)
