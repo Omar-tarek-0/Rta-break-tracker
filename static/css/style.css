@@ -7,12 +7,12 @@
     --success: #34a853;
     --warning: #fbbc04;
     --danger: #ea4335;
-    --background: #1a1a2e;
-    --surface: #16213e;
-    --surface-light: #0f3460;
-    --text: #ffffff;
-    --text-secondary: #a0a0a0;
-    --border: #2a2a4a;
+    --background: #f5f7fa;
+    --surface: #ffffff;
+    --surface-light: #f8f9fb;
+    --text: #1a1a2e;
+    --text-secondary: #6b7280;
+    --border: #e5e7eb;
 }
 
 * {
@@ -23,7 +23,7 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 50%, #dde4eb 100%);
     color: var(--text);
     min-height: 100vh;
 }
@@ -44,8 +44,8 @@ body {
     padding: 40px;
     width: 100%;
     max-width: 400px;
-    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
-    border: 1px solid rgba(102, 126, 234, 0.2);
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.2);
+    border: 1px solid rgba(102, 126, 234, 0.3);
 }
 
 .login-header {
@@ -198,6 +198,7 @@ body {
 .header-left h1 {
     font-size: 18px;
     font-weight: 700;
+    color: #ffffff;
 }
 
 .header-date {
@@ -253,8 +254,8 @@ body {
     background: var(--surface);
     border-radius: 15px;
     overflow: hidden;
-    border: 1px solid rgba(102, 126, 234, 0.2);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
 }
 
 .panel-content {
@@ -312,12 +313,13 @@ body {
     align-items: center;
     justify-content: center;
     padding: 15px 10px;
-    background: var(--surface-light);
+    background: var(--surface);
     border: 2px solid var(--border);
     border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s;
     color: var(--text);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .break-type-btn:hover:not(.disabled) {
@@ -355,13 +357,14 @@ body {
 /* ==================== UPLOAD AREA ==================== */
 
 .upload-area {
-    background: var(--surface-light);
-    border: 2px dashed rgba(102, 126, 234, 0.3);
+    background: var(--surface);
+    border: 2px dashed rgba(102, 126, 234, 0.4);
     border-radius: 12px;
     padding: 30px;
     text-align: center;
     margin-bottom: 15px;
     transition: all 0.2s;
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.1);
 }
 
 .upload-area.dragover {
@@ -421,18 +424,20 @@ body {
 }
 
 .history-card {
-    background: var(--surface-light);
+    background: var(--surface);
     padding: 12px 15px;
     border-radius: 8px;
     border-left: 3px solid var(--success);
-    border: 1px solid rgba(102, 126, 234, 0.2);
+    border: 1px solid rgba(102, 126, 234, 0.3);
     margin-bottom: 8px;
     transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .history-card:hover {
-    border-color: rgba(102, 126, 234, 0.4);
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+    border-color: rgba(102, 126, 234, 0.5);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    transform: translateX(2px);
 }
 
 .history-card.active {
@@ -457,10 +462,9 @@ body {
     color: var(--text-secondary);
     text-align: center;
     padding: 40px 20px;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
     border-radius: 10px;
-    border: 1px dashed rgba(102, 126, 234, 0.3);
-    padding: 20px;
+    border: 2px dashed rgba(102, 126, 234, 0.4);
 }
 
 /* ==================== STATS BAR ==================== */
@@ -469,24 +473,26 @@ body {
     display: flex;
     gap: 15px;
     padding: 15px 25px;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
-    border-bottom: 1px solid rgba(102, 126, 234, 0.2);
-    border-top: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+    border-bottom: 1px solid rgba(102, 126, 234, 0.3);
+    border-top: 1px solid rgba(102, 126, 234, 0.2);
     justify-content: center;
 }
 
 .stat-card {
-    background: var(--surface-light);
+    background: var(--surface);
     padding: 15px 30px;
     border-radius: 10px;
     text-align: center;
-    border: 1px solid rgba(102, 126, 234, 0.2);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.15);
     transition: all 0.3s;
 }
 
 .stat-card:hover {
-    border-color: rgba(102, 126, 234, 0.5);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    border-color: rgba(102, 126, 234, 0.6);
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
+    transform: translateY(-2px);
 }
 
 .stat-value {
@@ -515,8 +521,8 @@ body {
     border-radius: 12px;
     padding: 20px;
     height: fit-content;
-    border: 1px solid rgba(102, 126, 234, 0.2);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
 }
 
 .filter-section {
@@ -536,11 +542,12 @@ body {
 .form-input, .form-select {
     width: 100%;
     padding: 10px 12px;
-    background: var(--surface-light);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
     color: var(--text);
     font-size: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .form-input:focus, .form-select:focus {
@@ -587,8 +594,8 @@ body {
     border-radius: 12px;
     display: flex;
     flex-direction: column;
-    border: 1px solid rgba(102, 126, 234, 0.2);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
 }
 
 .main-header {
@@ -621,17 +628,17 @@ body {
 /* ==================== AGENT CARD ==================== */
 
 .agent-card {
-    background: var(--surface-light);
+    background: var(--surface);
     border-radius: 12px;
     margin-bottom: 15px;
     border: 1px solid rgba(102, 126, 234, 0.3);
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.15);
     transition: all 0.3s;
 }
 
 .agent-card:hover {
-    border-color: rgba(102, 126, 234, 0.5);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    border-color: rgba(102, 126, 234, 0.6);
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
     transform: translateY(-2px);
 }
 
@@ -670,11 +677,12 @@ body {
     padding: 12px;
     border: 2px solid var(--success);
     transition: all 0.3s;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
 .break-mini-card:hover {
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+    transform: translateY(-3px);
 }
 
 .break-mini-card.active {
@@ -979,13 +987,14 @@ body {
     padding: 15px;
     border-radius: 10px;
     text-align: center;
-    border: 1px solid rgba(102, 126, 234, 0.2);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.15);
     transition: all 0.3s;
 }
 
 .summary-card:hover {
-    border-color: rgba(102, 126, 234, 0.5);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    border-color: rgba(102, 126, 234, 0.6);
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
     transform: translateY(-2px);
 }
 
@@ -1008,6 +1017,8 @@ body {
     background: var(--surface);
     border-radius: 10px;
     overflow-x: auto;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.15);
 }
 
 .metrics-table {
