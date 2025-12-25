@@ -90,17 +90,113 @@
                 <button class="btn btn-primary btn-block" onclick="showAgentList()">📋 Manage Agents</button>
                 <p class="agent-count">Total: {{ total_agents }} agents</p>
             </div>
+            
+            <hr class="divider">
+            
+            <div class="filter-section">
+                <h4>📅 Shift Management</h4>
+                <button class="btn btn-primary btn-block" onclick="showShiftModal()">🕐 Manage Shifts (2 Weeks)</button>
+            </div>
         </aside>
         
-        <!-- Main: Break Records -->
+        <!-- Main: Break Records & Reports -->
         <main class="main-area">
-            <div class="main-header">
-                <h2>📋 Break Records</h2>
-                <span id="recordsCount" class="records-count"></span>
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="breaks" onclick="switchTab('breaks')">📋 Break Records</button>
+                <button class="tab-btn" data-tab="reports" onclick="switchTab('reports')">📊 Reports & Export</button>
             </div>
             
-            <div id="breaksContainer" class="breaks-container">
-                <div class="loading">Loading breaks...</div>
+            <!-- Break Records Tab -->
+            <div id="tab-breaks" class="tab-content active">
+                <div class="main-header">
+                    <h2>📋 Break Records</h2>
+                    <span id="recordsCount" class="records-count"></span>
+                </div>
+                
+                <div id="breaksContainer" class="breaks-container">
+                    <div class="loading">Loading breaks...</div>
+                </div>
+            </div>
+            
+            <!-- Reports Tab -->
+            <div id="tab-reports" class="tab-content" style="display: none;">
+                <div class="main-header">
+                    <h2>📊 Reports & Export</h2>
+                </div>
+                
+                <div class="reports-section">
+                    <!-- Date Range -->
+                    <div class="report-controls">
+                        <div class="form-group">
+                            <label>📅 Date Range</label>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <input type="date" id="reportStartDate" class="form-input">
+                                <span>to</span>
+                                <input type="date" id="reportEndDate" class="form-input">
+                                <button class="btn btn-sm" onclick="setReportPeriod('today')">Today</button>
+                                <button class="btn btn-sm" onclick="setReportPeriod('week')">7 Days</button>
+                                <button class="btn btn-sm" onclick="setReportPeriod('month')">30 Days</button>
+                                <button class="btn btn-primary" onclick="loadMetrics()">📊 Generate Report</button>
+                                <button class="btn btn-success" onclick="exportToExcel()">📥 Export to Excel</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Summary Cards -->
+                    <div class="summary-cards" id="summaryCards" style="display: none;">
+                        <div class="summary-card">
+                            <div class="summary-label">Avg Utilization</div>
+                            <div class="summary-value" id="avgUtilization">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Avg Adherence</div>
+                            <div class="summary-value" id="avgAdherence">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Avg Conformance</div>
+                            <div class="summary-value" id="avgConformance">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Incidents</div>
+                            <div class="summary-value" id="totalIncidents">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Exceeding Breaks</div>
+                            <div class="summary-value" id="totalExceeding">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Emergency Breaks</div>
+                            <div class="summary-value" id="totalEmergency">-</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Metrics Table -->
+                    <div class="metrics-table-container">
+                        <table class="metrics-table">
+                            <thead>
+                                <tr>
+                                    <th>Agent Name</th>
+                                    <th>Scheduled Hours</th>
+                                    <th>Total Breaks</th>
+                                    <th>Break Time</th>
+                                    <th>Exceeding</th>
+                                    <th>Incidents</th>
+                                    <th>Emergency</th>
+                                    <th>Utilization %</th>
+                                    <th>Adherence %</th>
+                                    <th>Conformance %</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="metricsTableBody">
+                                <tr>
+                                    <td colspan="11" class="empty-message">Select date range and click "Generate Report"</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
@@ -186,6 +282,73 @@
         <div class="modal-footer">
             <button class="btn" onclick="hideDeleteAgentModal()">Cancel</button>
             <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDeleteAgent()">🗑️ Delete Agent</button>
+        </div>
+    </div>
+</div>
+
+<!-- Shift Management Modal -->
+<div id="shiftModal" class="modal" style="display: none;">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3>🕐 Shift Management (2 Weeks)</h3>
+            <button class="modal-close" onclick="hideShiftModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="shift-form">
+                <div class="form-group">
+                    <label>📅 Date Range (Start - End)</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="date" id="shiftStartDate" class="form-input">
+                        <span>to</span>
+                        <input type="date" id="shiftEndDate" class="form-input">
+                        <button class="btn btn-sm" onclick="setTwoWeeks()">Set 2 Weeks</button>
+                    </div>
+                    <small style="color: #666;">Select up to 14 days (2 weeks)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>⏰ Shift Time</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="time" id="shiftStartTime" class="form-input" value="08:00">
+                        <span>to</span>
+                        <input type="time" id="shiftEndTime" class="form-input" value="17:00">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Quick Templates</label>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button class="btn btn-sm" onclick="setShiftTemplate('08:00', '17:00')">8 AM - 5 PM</button>
+                        <button class="btn btn-sm" onclick="setShiftTemplate('11:00', '20:00')">11 AM - 8 PM</button>
+                        <button class="btn btn-sm" onclick="setShiftTemplate('13:00', '22:00')">1 PM - 10 PM</button>
+                        <button class="btn btn-sm" onclick="setShiftTemplate('16:00', '01:00')">4 PM - 1 AM</button>
+                        <button class="btn btn-sm" onclick="setShiftTemplate('00:00', '09:00')">12 AM - 9 AM</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>👥 Select Agents</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <button class="btn btn-sm" onclick="selectAllAgents()">Select All</button>
+                        <button class="btn btn-sm" onclick="deselectAllAgents()">Deselect All</button>
+                    </div>
+                    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
+                        {% for agent in agents %}
+                        <label style="display: block; padding: 5px;">
+                            <input type="checkbox" class="agent-checkbox" value="{{ agent.id }}" checked>
+                            {{ agent.full_name }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <p id="shiftError" class="error-message"></p>
+                <p id="shiftSuccess" class="success-message" style="display: none;"></p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="hideShiftModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveBulkShifts()">✅ Save Shifts for Selected Period</button>
         </div>
     </div>
 </div>

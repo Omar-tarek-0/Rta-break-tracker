@@ -24,8 +24,7 @@
                     <!-- Status -->
                     <div class="status-box {% if active_break %}status-on-break{% else %}status-at-work{% endif %}" id="statusBox">
                         {% if active_break %}
-                            <span id="statusText">⏳ On {{ active_break.get_break_info().name }} (<span id="elapsedTime">{{ active_break.get_elapsed_minutes() }}</span> min)</span>
-                            <p class="status-hint">Started at {{ active_break.start_time.strftime('%I:%M %p') }} • Allowed: {{ active_break.get_allowed_duration() }} min</p>
+                            <span id="statusText">⏳ On Break (<span id="elapsedTime">{{ active_break.get_elapsed_minutes() }}</span> min)</span>
                         {% else %}
                             <span id="statusText">🟢 Status: At Work</span>
                         {% endif %}
@@ -40,7 +39,7 @@
                                 style="--break-color: {{ info.color }}">
                             <span class="emoji">{{ info.emoji }}</span>
                             <span class="name">{{ info.name }}</span>
-                            <span class="duration">{% if break_durations[key] > 0 %}({{ break_durations[key] }} min){% else %}(Instant){% endif %}</span>
+                            <span class="duration">({{ break_durations[key] }} min)</span>
                         </button>
                         {% endfor %}
                     </div>
@@ -85,15 +84,17 @@
                     <div class="break-history" id="breakHistory">
                         {% if today_breaks %}
                             {% for br in today_breaks %}
-                            <div class="history-card {% if br.break_type == 'punch_in' %}punch-in{% elif br.break_type == 'punch_out' %}punch-out{% elif br.is_active() %}active{% elif br.is_overdue %}overdue{% else %}completed{% endif %}">
+                            <div class="history-card {% if br.is_active() %}active{% elif br.is_overdue %}overdue{% else %}completed{% endif %}">
                                 <div class="history-info">
-                                    <span class="history-type">{{ br.get_break_info().emoji }} {{ br.get_break_info().name }}</span>
-                                    <span class="history-time">{{ br.start_time.strftime('%I:%M %p') }}</span>
+                                    <span class="history-type">{{ br.get_break_info().emoji }} {{ br.start_time.strftime('%I:%M %p') }}</span>
+                                    {% if br.end_time %}
+                                        <span> → {{ br.end_time.strftime('%I:%M %p') }}</span>
+                                    {% else %}
+                                        <span> → ⏳ On Break...</span>
+                                    {% endif %}
                                 </div>
                                 <div class="history-status">
-                                    {% if br.break_type in ['punch_in', 'punch_out'] %}
-                                        ✅
-                                    {% elif br.is_active() %}
+                                    {% if br.is_active() %}
                                         ({{ br.get_elapsed_minutes() }} min elapsed)
                                     {% elif br.is_overdue %}
                                         ({{ br.duration_minutes }} min) ⚠️
@@ -104,38 +105,34 @@
                             </div>
                             {% endfor %}
                         {% else %}
-                            <p class="empty-message">No activity recorded today</p>
+                            <p class="empty-message">No breaks recorded today</p>
                         {% endif %}
                     </div>
                 </div>
-            </div>
-            
-            <!-- Shift Schedule Panel -->
-            <div class="panel panel-sidebar" style="margin-top: 20px;">
-                <div class="panel-header">
+                
+                <!-- My Schedule (Next 2 Weeks) -->
+                <div class="panel-header" style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 15px;">
                     <h3>📅 My Schedule (Next 2 Weeks)</h3>
                 </div>
                 <div class="panel-content">
-                    <div class="shift-schedule" id="shiftSchedule">
-                        {% for date_info in schedule_dates %}
-                            {% set check_date = date_info.date %}
-                            {% set shift = date_info.shift %}
-                            <div class="shift-day {% if check_date == today %}shift-today{% elif shift %}shift-assigned{% else %}shift-empty{% endif %}">
-                                <div class="shift-date">
-                                    <span class="shift-day-name">{{ check_date.strftime('%a') }}</span>
-                                    <span class="shift-day-number">{{ check_date.strftime('%d') }}</span>
-                                    <span class="shift-month">{{ check_date.strftime('%b') }}</span>
-                                </div>
-                                <div class="shift-time">
-                                    {% if shift %}
-                                        <span class="shift-time-range">{{ shift.start_time.strftime('%I:%M %p') }} - {{ shift.end_time.strftime('%I:%M %p') }}</span>
-                                    {% elif check_date == today %}
-                                        <span class="shift-time-range no-shift">No shift assigned</span>
-                                    {% else %}
-                                        <span class="shift-time-range no-shift">—</span>
-                                    {% endif %}
-                                </div>
+                    <div class="schedule-container">
+                        {% for schedule_item in schedule_dates %}
+                        <div class="schedule-item {% if schedule_item.shift %}has-shift{% else %}no-shift{% endif %}">
+                            <div class="schedule-date">
+                                <span class="schedule-day">{{ schedule_item.date.strftime('%a') }}</span>
+                                <span class="schedule-date-num">{{ schedule_item.date.strftime('%d') }}</span>
+                                <span class="schedule-month">{{ schedule_item.date.strftime('%b') }}</span>
                             </div>
+                            {% if schedule_item.shift %}
+                            <div class="schedule-shift">
+                                <span class="shift-badge">🕐 {{ schedule_item.shift.start_time.strftime('%I:%M %p') }} - {{ schedule_item.shift.end_time.strftime('%I:%M %p') }}</span>
+                            </div>
+                            {% else %}
+                            <div class="schedule-shift">
+                                <span class="no-shift">No shift</span>
+                            </div>
+                            {% endif %}
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -149,11 +146,8 @@
     window.agentData = {
         hasActiveBreak: {% if active_break %}true{% else %}false{% endif %},
         activeBreakId: {% if active_break %}{{ active_break.id }}{% else %}null{% endif %},
-        activeBreakStart: {% if active_break %}"{{ active_break.start_time.isoformat() }}"{% else %}null{% endif %},
-        activeBreakType: {% if active_break %}"{{ active_break.break_type }}"{% else %}null{% endif %},
-        activeBreakAllowedDuration: {% if active_break %}{{ active_break.get_allowed_duration() }}{% else %}null{% endif %},
-        breakInfo: {{ break_types|tojson }},
-        breakDurations: {{ break_durations|tojson }}
+        activeBreakStart: {% if active_break %}"{{ active_break.start_time.isoformat() }}"{% else %}null{% endif %}
     };
 </script>
 {% endblock %}
+

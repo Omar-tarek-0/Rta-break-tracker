@@ -292,6 +292,26 @@ def agent_view():
         shift_date=today
     ).first()
     
+    # Get shifts for the next 2 weeks (14 days from today)
+    end_date = today + timedelta(days=13)  # Today + 13 days = 14 days total
+    upcoming_shifts = Shift.query.filter(
+        Shift.agent_id == current_user.id,
+        Shift.shift_date >= today,
+        Shift.shift_date <= end_date
+    ).order_by(Shift.shift_date.asc()).all()
+    
+    # Create a dictionary for easy lookup by date
+    shifts_by_date = {shift.shift_date: shift for shift in upcoming_shifts}
+    
+    # Generate list of dates for the next 2 weeks
+    schedule_dates = []
+    for i in range(14):
+        schedule_date = today + timedelta(days=i)
+        schedule_dates.append({
+            'date': schedule_date,
+            'shift': shifts_by_date.get(schedule_date)
+        })
+    
     # Check punch in/out status for today
     punch_in = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
@@ -320,6 +340,11 @@ def agent_view():
         user=current_user,
         active_break=active_break,
         today_breaks=today_breaks,
+        upcoming_shifts=upcoming_shifts,
+        shifts_by_date=shifts_by_date,
+        schedule_dates=schedule_dates,
+        today=today,
+        end_date=end_date,
         today_shift=today_shift,
         punch_status=punch_status,
         punch_in_time=punch_in.start_time if punch_in else None,

@@ -896,6 +896,190 @@ body {
     font-style: italic;
 }
 
+/* ==================== SCHEDULE DISPLAY ==================== */
+
+.schedule-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.schedule-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-light);
+}
+
+.schedule-item.has-shift {
+    background: var(--surface);
+    border-color: var(--primary);
+}
+
+.schedule-date {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 80px;
+}
+
+.schedule-day {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.schedule-date-num {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.schedule-month {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.schedule-shift {
+    flex: 1;
+    text-align: right;
+}
+
+.shift-badge {
+    display: inline-block;
+    padding: 5px 10px;
+    background: var(--primary-gradient);
+    color: #ffffff;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.no-shift {
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 12px;
+}
+
+/* ==================== TABS ==================== */
+
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--border);
+}
+
+.tab-btn {
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    color: var(--text);
+}
+
+.tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* ==================== REPORTS ==================== */
+
+.reports-section {
+    padding: 20px 0;
+}
+
+.report-controls {
+    margin-bottom: 30px;
+    padding: 20px;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.summary-card {
+    background: var(--surface);
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    text-align: center;
+}
+
+.summary-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.summary-value {
+    font-size: 24px;
+    font-weight: 700;
+    background: var(--primary-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.metrics-table-container {
+    overflow-x: auto;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+.metrics-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.metrics-table th {
+    background: var(--primary-gradient);
+    color: #ffffff;
+    padding: 12px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.metrics-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+}
+
+.metrics-table tr:hover {
+    background: var(--surface-light);
+}
+
 /* ==================== RESPONSIVE ==================== */
 
 @media (max-width: 1024px) {
