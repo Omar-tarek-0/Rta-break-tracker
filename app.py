@@ -12,7 +12,6 @@ import bcrypt
 import os
 import uuid
 import io
-import json
 
 from config import (
     SECRET_KEY, SQLALCHEMY_DATABASE_URI, UPLOAD_FOLDER, 
@@ -207,15 +206,8 @@ def save_screenshot(file):
 
 
 def init_db():
-    """Initialize database and create default users
-    
-    IMPORTANT: This function is SAFE - it does NOT delete existing data!
-    - db.create_all() only creates tables if they don't exist
-    - It does NOT drop existing tables
-    - It does NOT delete any data
-    - Your users, breaks, and shifts will persist across deployments
-    """
-    db.create_all()  # Safe: Only creates missing tables, never drops existing ones
+    """Initialize database and create default users"""
+    db.create_all()
     
     # Create default users if they don't exist
     for user_data in DEFAULT_USERS:
@@ -294,35 +286,44 @@ def agent_view():
         db.func.date(BreakRecord.start_time) == today
     ).order_by(BreakRecord.start_time.desc()).all()
     
-    # Get shifts for the next 2 weeks (14 days from today)
-    end_date = today + timedelta(days=13)  # Today + 13 days = 14 days total
-    upcoming_shifts = Shift.query.filter(
-        Shift.agent_id == current_user.id,
-        Shift.shift_date >= today,
-        Shift.shift_date <= end_date
-    ).order_by(Shift.shift_date.asc()).all()
+    # Get today's shift for this agent
+    today_shift = Shift.query.filter_by(
+        agent_id=current_user.id,
+        shift_date=today
+    ).first()
     
-    # Create a dictionary for easy lookup by date
-    shifts_by_date = {shift.shift_date: shift for shift in upcoming_shifts}
+    # Check punch in/out status for today
+    punch_in = BreakRecord.query.filter(
+        BreakRecord.agent_id == current_user.id,
+        BreakRecord.break_type == 'punch_in',
+        db.func.date(BreakRecord.start_time) == today
+    ).first()
     
-    # Generate list of dates for the next 2 weeks
-    schedule_dates = []
-    for i in range(14):
-        schedule_date = today + timedelta(days=i)
-        schedule_dates.append({
-            'date': schedule_date,
-            'shift': shifts_by_date.get(schedule_date)
-        })
+    punch_out = BreakRecord.query.filter(
+        BreakRecord.agent_id == current_user.id,
+        BreakRecord.break_type == 'punch_out',
+        db.func.date(BreakRecord.start_time) == today
+    ).first()
+    
+    # Determine agent status
+    # not_punched_in: hasn't punched in yet today
+    # punched_in: punched in but not out
+    # punched_out: already punched out for the day
+    if not punch_in:
+        punch_status = 'not_punched_in'
+    elif punch_out:
+        punch_status = 'punched_out'
+    else:
+        punch_status = 'punched_in'
     
     return render_template('agent.html',
         user=current_user,
         active_break=active_break,
         today_breaks=today_breaks,
-        upcoming_shifts=upcoming_shifts,
-        shifts_by_date=shifts_by_date,
-        schedule_dates=schedule_dates,
-        today=today,
-        end_date=end_date,
+        today_shift=today_shift,
+        punch_status=punch_status,
+        punch_in_time=punch_in.start_time if punch_in else None,
+        punch_out_time=punch_out.start_time if punch_out else None,
         break_types=BREAK_INFO,
         break_durations=BREAK_DURATIONS
     )
@@ -439,40 +440,19 @@ def start_break():
     if not screenshot_path:
         return jsonify({'error': 'Invalid screenshot file'}), 400
     
-    # Get current time
-    now = get_local_time().replace(tzinfo=None)
-    
     # Create break record
     break_record = BreakRecord(
         agent_id=current_user.id,
         break_type=break_type,
-        start_time=now,
+        start_time=get_local_time().replace(tzinfo=None),
         start_screenshot=screenshot_path
     )
-    
-    # For punch_in and punch_out, auto-complete immediately (single screenshot)
-    if break_type in ['punch_in', 'punch_out']:
-        break_record.end_time = now
-        break_record.end_screenshot = screenshot_path  # Use same screenshot
-        break_record.duration_minutes = 0
-        break_record.is_overdue = False
-    
     db.session.add(break_record)
     db.session.commit()
     
-    # Return appropriate message
-    if break_type == 'punch_in':
-        message = 'Punched in successfully!'
-    elif break_type == 'punch_out':
-        message = 'Punched out successfully!'
-    elif BREAK_DURATIONS[break_type] == 0:
-        message = f'{BREAK_INFO[break_type]["name"]} recorded successfully!'
-    else:
-        message = f'{BREAK_INFO[break_type]["name"]} started! Return within {BREAK_DURATIONS[break_type]} minutes'
-    
     return jsonify({
         'success': True,
-        'message': message,
+        'message': f'Break started! Return within {BREAK_DURATIONS[break_type]} minutes',
         'break': break_record.to_dict()
     })
 
@@ -573,6 +553,66 @@ def create_agent():
         'success': True,
         'agent': {'id': user.id, 'username': user.username, 'full_name': user.full_name}
     })
+
+
+@app.route('/api/agent/<int:agent_id>/delete', methods=['DELETE'])
+@login_required
+def delete_agent(agent_id):
+    """
+    Safely delete an agent and all related data
+    
+    This function handles the foreign key constraint error by:
+    1. First deleting all shifts for this agent
+    2. Then deleting all break records for this agent
+    3. Finally deleting the user
+    
+    This prevents the "foreign key constraint violation" error.
+    """
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    # Prevent deleting yourself
+    if current_user.id == agent_id:
+        return jsonify({'error': 'You cannot delete yourself'}), 400
+    
+    # Get the user
+    user = User.query.get(agent_id)
+    if not user:
+        return jsonify({'error': 'Agent not found'}), 404
+    
+    # Prevent deleting RTM users
+    if user.is_rtm():
+        return jsonify({'error': 'Cannot delete RTM users'}), 400
+    
+    try:
+        # Count related data before deletion (for reporting)
+        shifts_count = Shift.query.filter_by(agent_id=agent_id).count()
+        breaks_count = BreakRecord.query.filter_by(agent_id=agent_id).count()
+        
+        # Step 1: Delete all shifts for this agent
+        Shift.query.filter_by(agent_id=agent_id).delete()
+        
+        # Step 2: Delete all break records for this agent
+        BreakRecord.query.filter_by(agent_id=agent_id).delete()
+        
+        # Step 3: Delete the user (now safe - no foreign key references)
+        db.session.delete(user)
+        
+        # Commit all deletions
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Agent "{user.full_name}" deleted successfully',
+            'deleted': {
+                'user': 1,
+                'shifts': shifts_count,
+                'breaks': breaks_count
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to delete agent: {str(e)}'}), 500
 
 
 @app.route('/uploads/<path:filename>')
@@ -721,60 +761,44 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         Shift.shift_date <= datetime.strptime(end_date, '%Y-%m-%d').date()
     ).all()
     
-    # Filter out punch_in and punch_out from break calculations
-    actual_breaks = [b for b in breaks if b.break_type not in ['punch_in', 'punch_out']]
-    
-    # Calculate metrics (excluding punch_in and punch_out)
+    # Calculate metrics
     total_scheduled_minutes = sum(s.get_duration_hours() * 60 for s in shifts)
-    total_break_minutes = sum(b.duration_minutes or 0 for b in actual_breaks if b.end_time)
-    total_allowed_break_minutes = sum(b.get_allowed_duration() for b in actual_breaks if b.end_time)
+    total_break_minutes = sum(b.duration_minutes or 0 for b in breaks if b.end_time)
+    total_allowed_break_minutes = sum(b.get_allowed_duration() for b in breaks if b.end_time)
     exceeding_break_minutes = max(0, total_break_minutes - total_allowed_break_minutes)
     
-    # Count incidents (overdue breaks, excluding punch_in/punch_out)
-    incidents = sum(1 for b in actual_breaks if b.is_overdue)
+    # Count incidents (overdue breaks)
+    incidents = sum(1 for b in breaks if b.is_overdue)
     
     # Count emergency breaks
-    emergency_count = sum(1 for b in actual_breaks if b.break_type == 'emergency')
+    emergency_count = sum(1 for b in breaks if b.break_type == 'emergency')
     
-    # Count lunch breaks
-    lunch_count = sum(1 for b in actual_breaks if b.break_type == 'lunch')
-    
-    # Count coaching breaks (both types)
-    coaching_count = sum(1 for b in actual_breaks if b.break_type in ['coaching_aya', 'coaching_mostafa'])
-    
-    # Count breaks by type (excluding punch_in/punch_out)
+    # Count breaks by type
     break_counts = {}
-    for b in actual_breaks:
+    for b in breaks:
         break_counts[b.break_type] = break_counts.get(b.break_type, 0) + 1
     
-    # Calculate utilization based on 8 working hours per day
-    # Count working days in the date range
-    start = datetime.strptime(start_date, '%Y-%m-%d').date()
-    end = datetime.strptime(end_date, '%Y-%m-%d').date()
-    working_days = (end - start).days + 1  # Include both start and end dates
-    
-    # Standard working hours: 8 hours per day = 480 minutes per day
-    STANDARD_WORKING_HOURS_PER_DAY = 8
-    STANDARD_WORKING_MINUTES_PER_DAY = STANDARD_WORKING_HOURS_PER_DAY * 60  # 480 minutes
-    total_expected_working_minutes = working_days * STANDARD_WORKING_MINUTES_PER_DAY
-    
-    # Time worked = expected working time - break time taken
-    if total_expected_working_minutes > 0:
-        time_worked = total_expected_working_minutes - total_break_minutes
-        utilization = (time_worked / total_expected_working_minutes) * 100
+    # Calculate utilization (time worked / scheduled time)
+    # Time worked = scheduled time - break time taken
+    if total_scheduled_minutes > 0:
+        time_worked = total_scheduled_minutes - total_break_minutes
+        utilization = (time_worked / total_scheduled_minutes) * 100
     else:
         utilization = 0
     
-    # Calculate adherence based on actual duration vs allowed duration for each break
-    # Exclude punch_in and punch_out from adherence calculation
-    # For each break: adherence = min(actual_duration, allowed_duration) / allowed_duration
-    # Then average all break adherence percentages
-    total_completed_breaks = len([b for b in actual_breaks if b.end_time])
+    # Calculate adherence based on:
+    # 1. Break durations (actual vs allowed)
+    # 2. Punch in time vs shift start time
+    # 3. Punch out time vs shift end time
+    
+    adherence_scores = []
+    
+    # 1. Break duration adherence
+    total_completed_breaks = len([b for b in breaks if b.end_time and b.break_type not in ['punch_in', 'punch_out']])
     
     if total_completed_breaks > 0:
-        break_adherence_scores = []
-        for b in actual_breaks:
-            if b.end_time and b.duration_minutes is not None:
+        for b in breaks:
+            if b.end_time and b.duration_minutes is not None and b.break_type not in ['punch_in', 'punch_out']:
                 allowed_duration = b.get_allowed_duration()
                 if allowed_duration > 0:
                     # Calculate adherence for this break
@@ -787,14 +811,83 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
                         # Penalty: adherence decreases when exceeding allowed time
                         # Formula: (allowed_duration / actual_duration) * 100
                         break_adherence = (allowed_duration / actual_duration) * 100
-                    break_adherence_scores.append(break_adherence)
+                    adherence_scores.append(break_adherence)
+    
+    # 2. Punch in/out adherence based on shift times
+    # Group shifts by date for easier lookup
+    shifts_by_date = {s.shift_date: s for s in shifts}
+    
+    # Group punch in/out by date
+    punch_records_by_date = {}
+    for b in breaks:
+        if b.break_type in ['punch_in', 'punch_out'] and b.start_time:
+            punch_date = b.start_time.date()
+            if punch_date not in punch_records_by_date:
+                punch_records_by_date[punch_date] = {}
+            punch_records_by_date[punch_date][b.break_type] = b
+    
+    # Calculate punch in/out adherence for each day with a shift
+    for shift_date, shift in shifts_by_date.items():
+        punch_records = punch_records_by_date.get(shift_date, {})
         
-        if break_adherence_scores:
-            adherence = sum(break_adherence_scores) / len(break_adherence_scores)
+        # Punch in adherence
+        if 'punch_in' in punch_records:
+            punch_in = punch_records['punch_in']
+            punch_in_time = punch_in.start_time.time()
+            shift_start_time = shift.start_time
+            
+            # Calculate difference in minutes
+            punch_in_datetime = datetime.combine(shift_date, punch_in_time)
+            shift_start_datetime = datetime.combine(shift_date, shift_start_time)
+            
+            # Allow 5 minutes grace period (early or late)
+            time_diff_minutes = abs((punch_in_datetime - shift_start_datetime).total_seconds() / 60)
+            
+            if time_diff_minutes <= 5:
+                punch_in_adherence = 100.0
+            else:
+                # Penalty: decrease adherence for being late/early
+                # Max penalty at 30 minutes = 0% adherence
+                # Formula: max(0, (30 - time_diff) / 30 * 100)
+                punch_in_adherence = max(0, (30 - time_diff_minutes) / 30 * 100)
+            adherence_scores.append(punch_in_adherence)
         else:
-            adherence = 100  # No completed breaks with duration
+            # No punch in = 0% adherence for that day
+            adherence_scores.append(0.0)
+        
+        # Punch out adherence
+        if 'punch_out' in punch_records:
+            punch_out = punch_records['punch_out']
+            punch_out_time = punch_out.start_time.time()
+            shift_end_time = shift.end_time
+            
+            # Calculate difference in minutes
+            punch_out_datetime = datetime.combine(shift_date, punch_out_time)
+            shift_end_datetime = datetime.combine(shift_date, shift_end_time)
+            
+            # Handle overnight shifts
+            if shift_end_time < shift.start_time:
+                shift_end_datetime += timedelta(days=1)
+            
+            # Allow 5 minutes grace period (early or late)
+            time_diff_minutes = abs((punch_out_datetime - shift_end_datetime).total_seconds() / 60)
+            
+            if time_diff_minutes <= 5:
+                punch_out_adherence = 100.0
+            else:
+                # Penalty: decrease adherence for being late/early
+                # Max penalty at 30 minutes = 0% adherence
+                punch_out_adherence = max(0, (30 - time_diff_minutes) / 30 * 100)
+            adherence_scores.append(punch_out_adherence)
+        else:
+            # No punch out = 0% adherence for that day
+            adherence_scores.append(0.0)
+    
+    # Calculate overall adherence as average of all scores
+    if adherence_scores:
+        adherence = sum(adherence_scores) / len(adherence_scores)
     else:
-        adherence = 100  # No breaks = 100% adherence
+        adherence = 100  # No data = 100% adherence (default)
     
     # Conformance (similar to adherence but measures schedule following)
     # For simplicity: conformance = did agent have shifts and follow them
@@ -804,15 +897,13 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         conformance = 0  # No shifts assigned = 0% conformance
     
     return {
-        'total_scheduled_hours': round(total_expected_working_minutes / 60, 2),  # 8 hours per day
+        'total_scheduled_hours': round(total_scheduled_minutes / 60, 2),
         'total_break_minutes': total_break_minutes,
         'total_allowed_break_minutes': total_allowed_break_minutes,
         'exceeding_break_minutes': exceeding_break_minutes,
         'incidents': incidents,
         'emergency_count': emergency_count,
-        'lunch_count': lunch_count,
-        'coaching_count': coaching_count,
-        'total_breaks': len(actual_breaks),
+        'total_breaks': len(breaks),
         'completed_breaks': total_completed_breaks,
         'utilization': round(utilization, 1),
         'adherence': round(adherence, 1),
@@ -841,8 +932,6 @@ def get_metrics():
         'exceeding_break_minutes': 0,
         'incidents': 0,
         'emergency_count': 0,
-        'lunch_count': 0,
-        'coaching_count': 0,
         'total_breaks': 0,
         'utilization_sum': 0,
         'adherence_sum': 0,
@@ -865,8 +954,6 @@ def get_metrics():
         totals['exceeding_break_minutes'] += metrics['exceeding_break_minutes']
         totals['incidents'] += metrics['incidents']
         totals['emergency_count'] += metrics['emergency_count']
-        totals['lunch_count'] += metrics['lunch_count']
-        totals['coaching_count'] += metrics['coaching_count']
         totals['total_breaks'] += metrics['total_breaks']
         if metrics['shifts_count'] > 0:
             totals['utilization_sum'] += metrics['utilization']
@@ -926,7 +1013,7 @@ def export_report():
     bad_fill = PatternFill(start_color="ffc7ce", end_color="ffc7ce", fill_type="solid")
     
     # Title
-    ws.merge_cells('A1:O1')
+    ws.merge_cells('A1:M1')
     ws['A1'] = f"RTA Agent Metrics Report ({start_date} to {end_date})"
     ws['A1'].font = Font(bold=True, size=14)
     ws['A1'].alignment = Alignment(horizontal="center")
@@ -942,8 +1029,6 @@ def export_report():
         "Exceeding (min)",
         "Incidents",
         "Emergency",
-        "Lunch",
-        "Coaching",
         "Utilization %",
         "Adherence %",
         "Conformance %",
@@ -966,8 +1051,6 @@ def export_report():
         'exceeding': 0,
         'incidents': 0,
         'emergency': 0,
-        'lunch': 0,
-        'coaching': 0,
         'breaks': 0,
         'util_sum': 0,
         'adh_sum': 0,
@@ -999,8 +1082,6 @@ def export_report():
             metrics['exceeding_break_minutes'],
             metrics['incidents'],
             metrics['emergency_count'],
-            metrics['lunch_count'],
-            metrics['coaching_count'],
             metrics['utilization'],
             metrics['adherence'],
             metrics['conformance'],
@@ -1021,8 +1102,6 @@ def export_report():
         total_metrics['exceeding'] += metrics['exceeding_break_minutes']
         total_metrics['incidents'] += metrics['incidents']
         total_metrics['emergency'] += metrics['emergency_count']
-        total_metrics['lunch'] += metrics['lunch_count']
-        total_metrics['coaching'] += metrics['coaching_count']
         total_metrics['breaks'] += metrics['total_breaks']
         if metrics['shifts_count'] > 0:
             total_metrics['util_sum'] += metrics['utilization']
@@ -1050,8 +1129,6 @@ def export_report():
         total_metrics['exceeding'],
         total_metrics['incidents'],
         total_metrics['emergency'],
-        total_metrics['lunch'],
-        total_metrics['coaching'],
         avg_util,
         avg_adh,
         avg_conf,
@@ -1066,7 +1143,7 @@ def export_report():
         cell.fill = total_fill
     
     # Adjust column widths
-    column_widths = [20, 15, 15, 12, 15, 15, 12, 10, 10, 10, 10, 12, 12, 12, 15]
+    column_widths = [20, 15, 15, 12, 15, 15, 12, 10, 10, 12, 12, 12, 15]
     for i, width in enumerate(column_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = width
     
@@ -1081,10 +1158,6 @@ def export_report():
     ws.cell(row=row, column=1, value=f"Total Incidents: {total_metrics['incidents']}")
     row += 1
     ws.cell(row=row, column=1, value=f"Total Emergency Breaks: {total_metrics['emergency']}")
-    row += 1
-    ws.cell(row=row, column=1, value=f"Total Lunch Breaks: {total_metrics['lunch']}")
-    row += 1
-    ws.cell(row=row, column=1, value=f"Total Coaching Breaks: {total_metrics['coaching']}")
     row += 1
     ws.cell(row=row, column=1, value=f"Total Exceeding Break Time: {total_metrics['exceeding']} minutes")
     row += 1
@@ -1109,239 +1182,12 @@ def export_report():
     )
 
 
-# ==================== BACKUP & RESTORE ====================
-
-@app.route('/api/backup/export', methods=['GET'])
-@login_required
-def export_backup():
-    """Export all data as JSON backup"""
-    if not current_user.is_rtm():
-        return jsonify({'error': 'Only RTM can export backups'}), 403
-    
-    try:
-        # Get all users (excluding password hashes for security)
-        users = User.query.all()
-        users_data = []
-        for user in users:
-            users_data.append({
-                'id': user.id,
-                'username': user.username,
-                'full_name': user.full_name,
-                'role': user.role,
-                'created_at': user.created_at.isoformat() if user.created_at else None
-            })
-        
-        # Get all break records
-        breaks = BreakRecord.query.all()
-        breaks_data = []
-        for br in breaks:
-            breaks_data.append({
-                'id': br.id,
-                'agent_id': br.agent_id,
-                'break_type': br.break_type,
-                'start_time': br.start_time.isoformat() if br.start_time else None,
-                'end_time': br.end_time.isoformat() if br.end_time else None,
-                'start_screenshot': br.start_screenshot,
-                'end_screenshot': br.end_screenshot,
-                'duration_minutes': br.duration_minutes,
-                'is_overdue': br.is_overdue,
-                'notes': br.notes,
-                'created_at': br.created_at.isoformat() if br.created_at else None
-            })
-        
-        # Get all shifts
-        shifts = Shift.query.all()
-        shifts_data = []
-        for shift in shifts:
-            shifts_data.append({
-                'id': shift.id,
-                'agent_id': shift.agent_id,
-                'shift_date': shift.shift_date.isoformat() if shift.shift_date else None,
-                'start_time': shift.start_time.isoformat() if shift.start_time else None,
-                'end_time': shift.end_time.isoformat() if shift.end_time else None,
-                'created_by': shift.created_by,
-                'created_at': shift.created_at.isoformat() if shift.created_at else None
-            })
-        
-        # Create backup structure
-        backup_data = {
-            'version': '1.0',
-            'exported_at': get_local_time().isoformat(),
-            'exported_by': current_user.full_name,
-            'data': {
-                'users': users_data,
-                'breaks': breaks_data,
-                'shifts': shifts_data
-            }
-        }
-        
-        # Return as JSON file
-        output = io.BytesIO()
-        output.write(json.dumps(backup_data, indent=2).encode('utf-8'))
-        output.seek(0)
-        
-        filename = f"rta-backup-{get_local_time().strftime('%Y%m%d-%H%M%S')}.json"
-        
-        return Response(
-            output.getvalue(),
-            mimetype='application/json',
-            headers={'Content-Disposition': f'attachment; filename={filename}'}
-        )
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/backup/import', methods=['POST'])
-@login_required
-def import_backup():
-    """Import data from JSON backup"""
-    if not current_user.is_rtm():
-        return jsonify({'error': 'Only RTM can import backups'}), 403
-    
-    try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        # Read and parse JSON
-        backup_data = json.loads(file.read().decode('utf-8'))
-        
-        if 'data' not in backup_data:
-            return jsonify({'error': 'Invalid backup file format'}), 400
-        
-        data = backup_data['data']
-        
-        # Clear existing data (optional - you might want to keep it)
-        # BreakRecord.query.delete()
-        # Shift.query.delete()
-        # User.query.filter(User.role == ROLE_AGENT).delete()  # Keep RTM users
-        
-        # Restore users (skip if username already exists to avoid conflicts)
-        users_restored = 0
-        if 'users' in data:
-            for user_data in data['users']:
-                # Skip if user already exists
-                existing = User.query.filter_by(username=user_data['username']).first()
-                if not existing:
-                    user = User(
-                        username=user_data['username'],
-                        full_name=user_data['full_name'],
-                        role=user_data['role']
-                    )
-                    # Set a default password (user should change it)
-                    user.set_password('changeme123')
-                    if 'created_at' in user_data and user_data['created_at']:
-                        user.created_at = datetime.fromisoformat(user_data['created_at'].replace('Z', '+00:00'))
-                    db.session.add(user)
-                    users_restored += 1
-        
-        # Restore breaks
-        breaks_restored = 0
-        if 'breaks' in data:
-            for break_data in data['breaks']:
-                # Get agent user
-                agent = User.query.get(break_data['agent_id'])
-                if agent:
-                    br = BreakRecord(
-                        agent_id=break_data['agent_id'],
-                        break_type=break_data['break_type'],
-                        start_screenshot=break_data.get('start_screenshot'),
-                        end_screenshot=break_data.get('end_screenshot'),
-                        duration_minutes=break_data.get('duration_minutes'),
-                        is_overdue=break_data.get('is_overdue', False),
-                        notes=break_data.get('notes')
-                    )
-                    if break_data.get('start_time'):
-                        br.start_time = datetime.fromisoformat(break_data['start_time'].replace('Z', '+00:00'))
-                    if break_data.get('end_time'):
-                        br.end_time = datetime.fromisoformat(break_data['end_time'].replace('Z', '+00:00'))
-                    if break_data.get('created_at'):
-                        br.created_at = datetime.fromisoformat(break_data['created_at'].replace('Z', '+00:00'))
-                    db.session.add(br)
-                    breaks_restored += 1
-        
-        # Restore shifts
-        shifts_restored = 0
-        if 'shifts' in data:
-            for shift_data in data['shifts']:
-                # Get agent user
-                agent = User.query.get(shift_data['agent_id'])
-                if agent:
-                    shift = Shift(
-                        agent_id=shift_data['agent_id'],
-                        shift_date=datetime.fromisoformat(shift_data['shift_date']).date() if shift_data.get('shift_date') else None,
-                        start_time=datetime.fromisoformat(shift_data['start_time']).time() if shift_data.get('start_time') else None,
-                        end_time=datetime.fromisoformat(shift_data['end_time']).time() if shift_data.get('end_time') else None,
-                        created_by=shift_data.get('created_by')
-                    )
-                    if shift_data.get('created_at'):
-                        shift.created_at = datetime.fromisoformat(shift_data['created_at'].replace('Z', '+00:00'))
-                    db.session.add(shift)
-                    shifts_restored += 1
-        
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': f'Backup restored: {users_restored} users, {breaks_restored} breaks, {shifts_restored} shifts'
-        })
-    except json.JSONDecodeError:
-        return jsonify({'error': 'Invalid JSON file'}), 400
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-
 # ==================== STARTUP ====================
 
 def create_app():
     """Initialize database - called on startup"""
-    print("=" * 60)
-    print("RTA BREAK TRACKER - STARTING UP")
-    print("=" * 60)
-    
     with app.app_context():
-        # Check if database has existing data before initializing
-        try:
-            print("[DATABASE] Connecting to database...")
-            existing_users = User.query.count()
-            existing_breaks = BreakRecord.query.count()
-            existing_shifts = Shift.query.count()
-            
-            print("=" * 60)
-            print(f"[DATABASE CHECK] Existing data found:")
-            print(f"  - Users: {existing_users}")
-            print(f"  - Breaks: {existing_breaks}")
-            print(f"  - Shifts: {existing_shifts}")
-            print("=" * 60)
-            
-            if existing_users == 0 and existing_breaks == 0:
-                print("⚠️  [DATABASE WARNING] Database appears to be EMPTY!")
-                print("⚠️  This might be a NEW database instance!")
-            else:
-                print("✅ [DATABASE OK] Database has existing data - safe to proceed")
-                print(f"✅ [DATA PERSISTENCE TEST] Found {existing_users} user(s) - Data is PERSISTING!")
-                
-                # List user names for verification
-                if existing_users > 0:
-                    users = User.query.all()
-                    user_names = [u.full_name for u in users]
-                    print(f"✅ [USERS LIST] Current users: {', '.join(user_names)}")
-        except Exception as e:
-            print("=" * 60)
-            print(f"❌ [DATABASE ERROR] Could not check existing data:")
-            print(f"   Error: {e}")
-            print("=" * 60)
-            import traceback
-            traceback.print_exc()
-        
-        print("[DATABASE] Initializing database schema...")
         init_db()
-        print("[DATABASE] Database initialization complete!")
-        print("=" * 60)
     return app
 
 # Initialize on import (for gunicorn)
