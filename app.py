@@ -440,19 +440,40 @@ def start_break():
     if not screenshot_path:
         return jsonify({'error': 'Invalid screenshot file'}), 400
     
+    # Get current time
+    now = get_local_time().replace(tzinfo=None)
+    
     # Create break record
     break_record = BreakRecord(
         agent_id=current_user.id,
         break_type=break_type,
-        start_time=get_local_time().replace(tzinfo=None),
+        start_time=now,
         start_screenshot=screenshot_path
     )
+    
+    # For punch_in and punch_out, auto-complete immediately (single screenshot)
+    if break_type in ['punch_in', 'punch_out']:
+        break_record.end_time = now
+        break_record.end_screenshot = screenshot_path  # Use same screenshot
+        break_record.duration_minutes = 0
+        break_record.is_overdue = False
+    
     db.session.add(break_record)
     db.session.commit()
     
+    # Return appropriate message
+    if break_type == 'punch_in':
+        message = 'Punched in successfully!'
+    elif break_type == 'punch_out':
+        message = 'Punched out successfully!'
+    elif BREAK_DURATIONS[break_type] == 0:
+        message = f'{BREAK_INFO[break_type]["name"]} recorded successfully!'
+    else:
+        message = f'{BREAK_INFO[break_type]["name"]} started! Return within {BREAK_DURATIONS[break_type]} minutes'
+    
     return jsonify({
         'success': True,
-        'message': f'Break started! Return within {BREAK_DURATIONS[break_type]} minutes',
+        'message': message,
         'break': break_record.to_dict()
     })
 
