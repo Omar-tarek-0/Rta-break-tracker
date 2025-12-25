@@ -1232,12 +1232,24 @@ def export_report():
 
 def create_app():
     """Initialize database - called on startup"""
-    with app.app_context():
-        init_db()
+    try:
+        with app.app_context():
+            init_db()
+    except Exception as e:
+        print(f"⚠️  [WARNING] Database initialization error: {e}")
+        print("⚠️  App will continue, but database operations may fail")
+        import traceback
+        traceback.print_exc()
     return app
 
 # Initialize on import (for gunicorn)
-create_app()
+try:
+    create_app()
+except Exception as e:
+    print(f"❌ [CRITICAL] Failed to initialize app: {e}")
+    import traceback
+    traceback.print_exc()
+    # Don't raise - let gunicorn handle it
 
 # ==================== MAIN ====================
 
