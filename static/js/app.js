@@ -525,6 +525,98 @@ async function createAgent() {
     }
 }
 
+// ==================== AGENT MANAGEMENT ====================
+
+let deleteAgentId = null;
+
+async function showAgentList() {
+    const modal = document.getElementById('agentListModal');
+    const container = document.getElementById('agentListContainer');
+    
+    modal.style.display = 'flex';
+    container.innerHTML = '<div class="loading">Loading agents...</div>';
+    
+    try {
+        const response = await fetch('/api/agents');
+        const data = await response.json();
+        
+        if (data.error) {
+            container.innerHTML = '<div class="error-message">' + data.error + '</div>';
+            return;
+        }
+        
+        if (data.agents.length === 0) {
+            container.innerHTML = '<div class="empty-message">No agents found. Add your first agent!</div>';
+            return;
+        }
+        
+        container.innerHTML = data.agents.map(agent => `
+            <div class="agent-list-item">
+                <div class="agent-list-info">
+                    <span class="agent-list-name">👤 ${agent.full_name}</span>
+                    <span class="agent-list-username">@${agent.username}</span>
+                </div>
+                <button class="btn btn-danger btn-sm" onclick="showDeleteAgentModal(${agent.id}, '${agent.full_name}')">
+                    🗑️ Delete
+                </button>
+            </div>
+        `).join('');
+        
+    } catch (err) {
+        container.innerHTML = '<div class="error-message">Failed to load agents: ' + err.message + '</div>';
+    }
+}
+
+function hideAgentList() {
+    document.getElementById('agentListModal').style.display = 'none';
+}
+
+function showDeleteAgentModal(agentId, agentName) {
+    deleteAgentId = agentId;
+    document.getElementById('deleteAgentMessage').textContent = 
+        `Are you sure you want to delete agent "${agentName}"?`;
+    document.getElementById('deleteAgentModal').style.display = 'flex';
+}
+
+function hideDeleteAgentModal() {
+    document.getElementById('deleteAgentModal').style.display = 'none';
+    deleteAgentId = null;
+}
+
+async function confirmDeleteAgent() {
+    if (!deleteAgentId) return;
+    
+    const btn = document.getElementById('confirmDeleteBtn');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+    
+    try {
+        const response = await fetch(`/api/agent/${deleteAgentId}/delete`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            hideDeleteAgentModal();
+            showAgentList(); // Refresh the list
+            // Show success message
+            alert(`✅ ${data.message}\n\nDeleted:\n- ${data.deleted.user} user\n- ${data.deleted.shifts} shifts\n- ${data.deleted.breaks} break records`);
+            // Reload page to update agent count
+            location.reload();
+        } else {
+            alert('❌ Error: ' + data.error);
+            btn.disabled = false;
+            btn.textContent = '🗑️ Delete Agent';
+        }
+    } catch (err) {
+        alert('❌ Network error: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = '🗑️ Delete Agent';
+    }
+}
+
 function showImage(src, title) {
     document.getElementById('modalImage').src = src;
     document.getElementById('imageModalTitle').textContent = title;
@@ -816,69 +908,5 @@ function exportToExcel() {
     
     // Trigger download
     window.location.href = `/api/report/export?start_date=${startDate}&end_date=${endDate}`;
-}
-
-// ==================== BACKUP & RESTORE ====================
-
-async function exportBackup() {
-    try {
-        const response = await fetch('/api/backup/export');
-        if (!response.ok) {
-            throw new Error('Failed to export backup');
-        }
-        
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `rta-backup-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        
-        alert('✅ Backup exported successfully! Save this file in a safe location.');
-    } catch (err) {
-        alert('❌ Error exporting backup: ' + err.message);
-    }
-}
-
-async function importBackup() {
-    const fileInput = document.getElementById('backupFile');
-    const file = fileInput.files[0];
-    
-    if (!file) {
-        alert('Please select a backup file first');
-        return;
-    }
-    
-    if (!confirm('⚠️ WARNING: This will replace ALL existing data! Are you sure you want to continue?')) {
-        return;
-    }
-    
-    if (!confirm('⚠️ This action cannot be undone. Are you absolutely sure?')) {
-        return;
-    }
-    
-    try {
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const response = await fetch('/api/backup/import', {
-            method: 'POST',
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            alert('✅ Backup restored successfully! The page will reload.');
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            alert('❌ Error restoring backup: ' + (data.error || 'Unknown error'));
-        }
-    } catch (err) {
-        alert('❌ Error importing backup: ' + err.message);
-    }
 }
 
