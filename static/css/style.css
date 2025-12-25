@@ -1,17 +1,18 @@
 /* RTA Break Tracker - Web Styles */
 
 :root {
-    --primary: #1a73e8;
-    --primary-hover: #1557b0;
+    --primary: #667eea;
+    --primary-hover: #764ba2;
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     --success: #34a853;
     --warning: #fbbc04;
     --danger: #ea4335;
-    --background: #1a1a2e;
-    --surface: #16213e;
-    --surface-light: #0f3460;
-    --text: #ffffff;
-    --text-secondary: #a0a0a0;
-    --border: #2a2a4a;
+    --background: #f5f7fa;
+    --surface: #ffffff;
+    --surface-light: #f8f9fb;
+    --text: #1a1a2e;
+    --text-secondary: #6b7280;
+    --border: #e5e7eb;
 }
 
 * {
@@ -22,7 +23,7 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background-color: var(--background);
+    background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 50%, #dde4eb 100%);
     color: var(--text);
     min-height: 100vh;
 }
@@ -43,7 +44,8 @@ body {
     padding: 40px;
     width: 100%;
     max-width: 400px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.2);
+    border: 1px solid rgba(102, 126, 234, 0.3);
 }
 
 .login-header {
@@ -129,11 +131,14 @@ body {
 }
 
 .btn-primary {
-    background: var(--primary);
+    background: var(--primary-gradient);
+    border: none;
 }
 
 .btn-primary:hover {
-    background: var(--primary-hover);
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .btn-success {
@@ -180,7 +185,8 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 15px 25px;
-    background: var(--surface);
+    background: var(--primary-gradient);
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
 }
 
 .header-left {
@@ -192,6 +198,7 @@ body {
 .header-left h1 {
     font-size: 18px;
     font-weight: 700;
+    color: #ffffff;
 }
 
 .header-date {
@@ -217,7 +224,8 @@ body {
 }
 
 .badge-primary {
-    background: var(--primary);
+    background: var(--primary-gradient);
+    color: #ffffff;
 }
 
 /* ==================== APP CONTAINER ==================== */
@@ -246,6 +254,8 @@ body {
     background: var(--surface);
     border-radius: 15px;
     overflow: hidden;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
 }
 
 .panel-content {
@@ -302,12 +312,13 @@ body {
     align-items: center;
     justify-content: center;
     padding: 15px 10px;
-    background: var(--surface-light);
+    background: var(--surface);
     border: 2px solid var(--border);
     border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s;
     color: var(--text);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .break-type-btn:hover:not(.disabled) {
@@ -343,13 +354,14 @@ body {
 /* ==================== UPLOAD AREA ==================== */
 
 .upload-area {
-    background: var(--surface-light);
-    border: 2px dashed var(--border);
+    background: var(--surface);
+    border: 2px dashed rgba(102, 126, 234, 0.4);
     border-radius: 12px;
     padding: 30px;
     text-align: center;
     margin-bottom: 15px;
     transition: all 0.2s;
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.1);
 }
 
 .upload-area.dragover {
@@ -408,7 +420,7 @@ body {
 }
 
 .history-card {
-    background: var(--surface-light);
+    background: var(--surface);
     padding: 12px 15px;
     border-radius: 8px;
     border-left: 3px solid var(--success);
@@ -575,7 +587,7 @@ body {
 /* ==================== AGENT CARD ==================== */
 
 .agent-card {
-    background: var(--surface-light);
+    background: var(--surface);
     border-radius: 12px;
     margin-bottom: 15px;
     border: 1px solid var(--border);
@@ -839,9 +851,10 @@ body {
     align-items: center;
     padding: 15px;
     margin-bottom: 10px;
-    background: var(--surface-light);
+    background: var(--surface);
     border-radius: 8px;
     border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .agent-list-info {
