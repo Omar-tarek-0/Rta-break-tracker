@@ -1077,7 +1077,7 @@ def export_report():
     bad_fill = PatternFill(start_color="ffc7ce", end_color="ffc7ce", fill_type="solid")
     
     # Title
-    ws.merge_cells('A1:M1')
+    ws.merge_cells('A1:Q1')
     ws['A1'] = f"RTA Agent Metrics Report ({start_date} to {end_date})"
     ws['A1'].font = Font(bold=True, size=14)
     ws['A1'].alignment = Alignment(horizontal="center")
@@ -1093,6 +1093,10 @@ def export_report():
         "Exceeding (min)",
         "Incidents",
         "Emergency",
+        "Lunch",
+        "Coaching",
+        "Overtime",
+        "Compensation",
         "Utilization %",
         "Adherence %",
         "Conformance %",
@@ -1146,6 +1150,10 @@ def export_report():
             metrics['exceeding_break_minutes'],
             metrics['incidents'],
             metrics['emergency_count'],
+            metrics.get('lunch_count', 0),
+            metrics.get('coaching_count', 0),
+            metrics.get('overtime_count', 0),
+            metrics.get('compensation_count', 0),
             metrics['utilization'],
             metrics['adherence'],
             metrics['conformance'],
@@ -1156,7 +1164,7 @@ def export_report():
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = cell_alignment
             cell.border = border
-            if col == 13:  # Status column
+            if col == 17:  # Status column
                 cell.fill = status_fill
         
         # Accumulate totals
@@ -1193,6 +1201,10 @@ def export_report():
         total_metrics['exceeding'],
         total_metrics['incidents'],
         total_metrics['emergency'],
+        "",  # Lunch (not summed)
+        "",  # Coaching (not summed)
+        "",  # Overtime (not summed)
+        "",  # Compensation (not summed)
         avg_util,
         avg_adh,
         avg_conf,
