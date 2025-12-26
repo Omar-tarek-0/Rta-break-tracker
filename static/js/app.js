@@ -853,7 +853,7 @@ async function loadMetrics() {
         
         // Populate table
         if (data.agents.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="13" class="empty-message">No agents found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="15" class="empty-message">No agents found</td></tr>';
             return;
         }
         
@@ -884,6 +884,8 @@ async function loadMetrics() {
                 <td>${agent.emergency_count}</td>
                 <td>${agent.lunch_count || 0}</td>
                 <td>${agent.coaching_count || 0}</td>
+                <td>${agent.overtime_count || 0}</td>
+                <td>${agent.compensation_count || 0}</td>
                 <td>${agent.utilization}%</td>
                 <td>${agent.adherence}%</td>
                 <td>${agent.conformance}%</td>
@@ -893,7 +895,7 @@ async function loadMetrics() {
         });
         
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="13" class="error-message">Error: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="15" class="error-message">Error: ${err.message}</td></tr>`;
     }
 }
 

@@ -824,6 +824,12 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     for b in breaks:
         break_counts[b.break_type] = break_counts.get(b.break_type, 0) + 1
     
+    # Count specific break types for reporting
+    lunch_count = break_counts.get('lunch', 0)
+    coaching_count = break_counts.get('coaching_aya', 0) + break_counts.get('coaching_mostafa', 0)
+    overtime_count = break_counts.get('overtime', 0)
+    compensation_count = break_counts.get('compensation', 0)
+    
     # Calculate utilization (time worked / scheduled time)
     # Exclude lunch, emergency, and overtime from utilization calculation
     # These are legitimate work activities that shouldn't reduce utilization
@@ -959,6 +965,10 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         'emergency_count': emergency_count,
         'total_breaks': len(breaks),
         'completed_breaks': total_completed_breaks,
+        'lunch_count': lunch_count,
+        'coaching_count': coaching_count,
+        'overtime_count': overtime_count,
+        'compensation_count': compensation_count,
         'utilization': round(utilization, 1),
         'adherence': round(adherence, 1),
         'conformance': round(conformance, 1),
