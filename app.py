@@ -825,9 +825,17 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         break_counts[b.break_type] = break_counts.get(b.break_type, 0) + 1
     
     # Calculate utilization (time worked / scheduled time)
-    # Time worked = scheduled time - break time taken
+    # Exclude lunch, emergency, and overtime from utilization calculation
+    # These are legitimate work activities that shouldn't reduce utilization
+    utilization_break_minutes = sum(
+        b.duration_minutes or 0 
+        for b in breaks 
+        if b.end_time and b.break_type not in ['lunch', 'emergency', 'overtime', 'punch_in', 'punch_out']
+    )
+    
+    # Time worked = scheduled time - break time (excluding lunch, emergency, overtime)
     if total_scheduled_minutes > 0:
-        time_worked = total_scheduled_minutes - total_break_minutes
+        time_worked = total_scheduled_minutes - utilization_break_minutes
         utilization = (time_worked / total_scheduled_minutes) * 100
     else:
         utilization = 0
