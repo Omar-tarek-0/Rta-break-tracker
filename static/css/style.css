@@ -169,6 +169,11 @@ body {
 
 .btn-block {
     width: 100%;
+    margin-bottom: 10px;
+}
+
+.btn-block:last-child {
+    margin-bottom: 0;
 }
 
 .btn-large {
