@@ -23,66 +23,20 @@ TIMEZONE = pytz.timezone(os.environ.get('TIMEZONE', 'Africa/Cairo'))
 SECRET_KEY = os.environ.get('SECRET_KEY', 'rta-break-tracker-dev-key-change-in-production')
 
 # Database Configuration
-# Priority: DATABASE_PRIVATE_URL > PG* variables > DATABASE_URL > DATABASE_PUBLIC_URL > SQLite
-
-print("=" * 60)
-print("[DATABASE CONFIG] Checking database connection...")
-
-# Get all possible database variables
-DATABASE_PRIVATE_URL = os.environ.get('DATABASE_PRIVATE_URL')
+# Use PostgreSQL in production, SQLite in development
 DATABASE_URL = os.environ.get('DATABASE_URL')
-DATABASE_PUBLIC_URL = os.environ.get('DATABASE_PUBLIC_URL')
-PGHOST = os.environ.get('PGHOST')
-PGDATABASE = os.environ.get('PGDATABASE')
-PGUSER = os.environ.get('PGUSER')
-PGPASSWORD = os.environ.get('PGPASSWORD')
-PGPORT = os.environ.get('PGPORT', '5432')
 
-print("[DATABASE CONFIG] Environment variables found:")
-print(f"  - PGHOST: {'✅ Set' if PGHOST else '❌ Not set'}")
-print(f"  - PGDATABASE: {'✅ Set' if PGDATABASE else '❌ Not set'}")
-print(f"  - DATABASE_URL: {'✅ Set' if DATABASE_URL else '❌ Not set'}")
-print(f"  - DATABASE_PUBLIC_URL: {'✅ Set' if DATABASE_PUBLIC_URL else '❌ Not set'}")
-
-# Priority 1: DATABASE_PRIVATE_URL (private endpoint, no egress fees)
-if DATABASE_PRIVATE_URL:
-    SQLALCHEMY_DATABASE_URI = DATABASE_PRIVATE_URL
-    if SQLALCHEMY_DATABASE_URI.startswith('postgres://'):
-        SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace('postgres://', 'postgresql://', 1)
-    print("[DATABASE CONFIG] ✅ Using: DATABASE_PRIVATE_URL (Private endpoint)")
-# Priority 2: Construct from PG* variables (if PGHOST is internal)
-elif PGHOST and PGDATABASE and PGUSER and PGPASSWORD:
-    if 'railway.internal' in PGHOST or PGHOST == 'postgres.railway.internal':
-        # Private endpoint - construct URI
-        SQLALCHEMY_DATABASE_URI = f'postgresql://{PGUSER}:{PGPASSWORD}@{PGHOST}:{PGPORT}/{PGDATABASE}'
-        print("[DATABASE CONFIG] ✅ Using: PostgreSQL (Private - from PG* variables)")
-    else:
-        # Public endpoint - use if no other option
-        SQLALCHEMY_DATABASE_URI = f'postgresql://{PGUSER}:{PGPASSWORD}@{PGHOST}:{PGPORT}/{PGDATABASE}'
-        print("[DATABASE CONFIG] ⚠️  Using: PostgreSQL (Public - from PG* variables)")
-# Priority 3: DATABASE_URL
-elif DATABASE_URL:
+if DATABASE_URL:
+    # Production: Use PostgreSQL
+    # Fix Heroku/Railway postgres:// to postgresql://
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
-    if SQLALCHEMY_DATABASE_URI.startswith('postgres://'):
-        SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace('postgres://', 'postgresql://', 1)
-    print("[DATABASE CONFIG] ✅ Using: DATABASE_URL")
-# Priority 4: DATABASE_PUBLIC_URL (last resort - incurs egress fees)
-elif DATABASE_PUBLIC_URL:
-    SQLALCHEMY_DATABASE_URI = DATABASE_PUBLIC_URL
-    if SQLALCHEMY_DATABASE_URI.startswith('postgres://'):
-        SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace('postgres://', 'postgresql://', 1)
-    print("[DATABASE CONFIG] ⚠️  Using: DATABASE_PUBLIC_URL (Public endpoint - may incur egress fees)")
-# Fallback: SQLite (development only)
 else:
+    # Development: Use SQLite
     DATABASE_PATH = BASE_DIR / 'data' / 'database.db'
     SQLALCHEMY_DATABASE_URI = f'sqlite:///{DATABASE_PATH}'
     (BASE_DIR / 'data').mkdir(exist_ok=True)
-    print("[DATABASE CONFIG] ❌ CRITICAL ERROR: No database URI found!")
-    print("[DATABASE CONFIG] ❌ This will use SQLite, which DOES NOT PERSIST on Railway!")
-    print("[DATABASE CONFIG] ❌ Your data will be LOST on each deployment!")
-    print("[DATABASE CONFIG] ❌ Please check Railway database connection!")
-
-print("=" * 60)
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
@@ -101,14 +55,7 @@ BREAK_DURATIONS = {
     "lunch": 30,
     "meeting": 60,
     "huddle": 15,
-    "emergency": 15,  # Increased from 10 to 15 minutes
-    "coaching_aya": 30,
-    "coaching_mostafa": 30,
-    "punch_in": 0,  # Single screenshot, auto-completed
-    "punch_out": 0,  # Single screenshot, auto-completed
-    "overtime": 0,
-    "compensation": 0,
-    "meeting_team_leader": 60
+    "emergency": 10
 }
 
 # Break display info
@@ -117,14 +64,7 @@ BREAK_INFO = {
     "lunch": {"name": "Lunch Break", "emoji": "🍽️", "color": "#4caf50"},
     "meeting": {"name": "Meeting", "emoji": "📅", "color": "#9c27b0"},
     "huddle": {"name": "Huddle", "emoji": "👥", "color": "#ff9800"},
-    "emergency": {"name": "Emergency", "emoji": "🚨", "color": "#f44336"},
-    "coaching_aya": {"name": "Coaching with Aya", "emoji": "👩‍🏫", "color": "#e91e63"},
-    "coaching_mostafa": {"name": "Coaching with ₘₒₛₜₐfₐ", "emoji": "👨‍🏫", "color": "#00bcd4"},
-    "punch_in": {"name": "Punch In", "emoji": "🟢", "color": "#4caf50"},
-    "punch_out": {"name": "Punch Out", "emoji": "🔴", "color": "#f44336"},
-    "overtime": {"name": "Overtime", "emoji": "⏰", "color": "#ff9800"},
-    "compensation": {"name": "Compensation", "emoji": "💰", "color": "#9c27b0"},
-    "meeting_team_leader": {"name": "Meeting with Team Leader", "emoji": "👔", "color": "#607d8b"}
+    "emergency": {"name": "Emergency", "emoji": "🚨", "color": "#f44336"}
 }
 
 # User Roles

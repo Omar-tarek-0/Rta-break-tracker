@@ -74,7 +74,7 @@
                 </div>
             </div>
             
-            <!-- Right Panel: Today's History & Schedule -->
+            <!-- Right Panel: Today's History -->
             <div class="panel panel-sidebar">
                 <div class="panel-header">
                     <h3>📋 Today's Breaks</h3>
@@ -107,33 +107,6 @@
                         {% else %}
                             <p class="empty-message">No breaks recorded today</p>
                         {% endif %}
-                    </div>
-                </div>
-                
-                <!-- My Schedule (Next 2 Weeks) -->
-                <div class="panel-header" style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 15px;">
-                    <h3>📅 My Schedule (Next 2 Weeks)</h3>
-                </div>
-                <div class="panel-content">
-                    <div class="schedule-container">
-                        {% for schedule_item in schedule_dates %}
-                        <div class="schedule-item {% if schedule_item.shift %}has-shift{% else %}no-shift{% endif %}">
-                            <div class="schedule-date">
-                                <span class="schedule-day">{{ schedule_item.date.strftime('%a') }}</span>
-                                <span class="schedule-date-num">{{ schedule_item.date.strftime('%d') }}</span>
-                                <span class="schedule-month">{{ schedule_item.date.strftime('%b') }}</span>
-                            </div>
-                            {% if schedule_item.shift %}
-                            <div class="schedule-shift">
-                                <span class="shift-badge">🕐 {{ schedule_item.shift.start_time.strftime('%I:%M %p') }} - {{ schedule_item.shift.end_time.strftime('%I:%M %p') }}</span>
-                            </div>
-                            {% else %}
-                            <div class="schedule-shift">
-                                <span class="no-shift">No shift</span>
-                            </div>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
                     </div>
                 </div>
             </div>

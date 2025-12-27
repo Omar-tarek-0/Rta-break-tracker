@@ -292,26 +292,6 @@ def agent_view():
         shift_date=today
     ).first()
     
-    # Get shifts for the next 2 weeks (14 days from today)
-    end_date = today + timedelta(days=13)  # Today + 13 days = 14 days total
-    upcoming_shifts = Shift.query.filter(
-        Shift.agent_id == current_user.id,
-        Shift.shift_date >= today,
-        Shift.shift_date <= end_date
-    ).order_by(Shift.shift_date.asc()).all()
-    
-    # Create a dictionary for easy lookup by date
-    shifts_by_date = {shift.shift_date: shift for shift in upcoming_shifts}
-    
-    # Generate list of dates for the next 2 weeks
-    schedule_dates = []
-    for i in range(14):
-        schedule_date = today + timedelta(days=i)
-        schedule_dates.append({
-            'date': schedule_date,
-            'shift': shifts_by_date.get(schedule_date)
-        })
-    
     # Check punch in/out status for today
     punch_in = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
@@ -340,11 +320,6 @@ def agent_view():
         user=current_user,
         active_break=active_break,
         today_breaks=today_breaks,
-        upcoming_shifts=upcoming_shifts,
-        shifts_by_date=shifts_by_date,
-        schedule_dates=schedule_dates,
-        today=today,
-        end_date=end_date,
         today_shift=today_shift,
         punch_status=punch_status,
         punch_in_time=punch_in.start_time if punch_in else None,
@@ -465,40 +440,19 @@ def start_break():
     if not screenshot_path:
         return jsonify({'error': 'Invalid screenshot file'}), 400
     
-    # Get current time
-    now = get_local_time().replace(tzinfo=None)
-    
     # Create break record
     break_record = BreakRecord(
         agent_id=current_user.id,
         break_type=break_type,
-        start_time=now,
+        start_time=get_local_time().replace(tzinfo=None),
         start_screenshot=screenshot_path
     )
-    
-    # For punch_in and punch_out, auto-complete immediately (single screenshot)
-    if break_type in ['punch_in', 'punch_out']:
-        break_record.end_time = now
-        break_record.end_screenshot = screenshot_path  # Use same screenshot
-        break_record.duration_minutes = 0
-        break_record.is_overdue = False
-    
     db.session.add(break_record)
     db.session.commit()
     
-    # Return appropriate message
-    if break_type == 'punch_in':
-        message = 'Punched in successfully!'
-    elif break_type == 'punch_out':
-        message = 'Punched out successfully!'
-    elif BREAK_DURATIONS[break_type] == 0:
-        message = f'{BREAK_INFO[break_type]["name"]} recorded successfully!'
-    else:
-        message = f'{BREAK_INFO[break_type]["name"]} started! Return within {BREAK_DURATIONS[break_type]} minutes'
-    
     return jsonify({
         'success': True,
-        'message': message,
+        'message': f'Break started! Return within {BREAK_DURATIONS[break_type]} minutes',
         'break': break_record.to_dict()
     })
 
@@ -601,66 +555,6 @@ def create_agent():
     })
 
 
-@app.route('/api/agent/<int:agent_id>/delete', methods=['DELETE'])
-@login_required
-def delete_agent(agent_id):
-    """
-    Safely delete an agent and all related data
-    
-    This function handles the foreign key constraint error by:
-    1. First deleting all shifts for this agent
-    2. Then deleting all break records for this agent
-    3. Finally deleting the user
-    
-    This prevents the "foreign key constraint violation" error.
-    """
-    if not current_user.is_rtm():
-        return jsonify({'error': 'Unauthorized'}), 403
-    
-    # Prevent deleting yourself
-    if current_user.id == agent_id:
-        return jsonify({'error': 'You cannot delete yourself'}), 400
-    
-    # Get the user
-    user = User.query.get(agent_id)
-    if not user:
-        return jsonify({'error': 'Agent not found'}), 404
-    
-    # Prevent deleting RTM users
-    if user.is_rtm():
-        return jsonify({'error': 'Cannot delete RTM users'}), 400
-    
-    try:
-        # Count related data before deletion (for reporting)
-        shifts_count = Shift.query.filter_by(agent_id=agent_id).count()
-        breaks_count = BreakRecord.query.filter_by(agent_id=agent_id).count()
-        
-        # Step 1: Delete all shifts for this agent
-        Shift.query.filter_by(agent_id=agent_id).delete()
-        
-        # Step 2: Delete all break records for this agent
-        BreakRecord.query.filter_by(agent_id=agent_id).delete()
-        
-        # Step 3: Delete the user (now safe - no foreign key references)
-        db.session.delete(user)
-        
-        # Commit all deletions
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': f'Agent "{user.full_name}" deleted successfully',
-            'deleted': {
-                'user': 1,
-                'shifts': shifts_count,
-                'breaks': breaks_count
-            }
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': f'Failed to delete agent: {str(e)}'}), 500
-
-
 @app.route('/uploads/<path:filename>')
 @login_required
 def uploaded_file(filename):
@@ -677,9 +571,15 @@ def get_shifts():
     if not current_user.is_rtm():
         return jsonify({'error': 'Unauthorized'}), 403
     
-    start_date = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
-    end_date = request.args.get('end_date', start_date)
+    start_date_str = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
+    end_date_str = request.args.get('end_date', start_date_str)
     agent_id = request.args.get('agent_id', '')
+    
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
     
     query = Shift.query.filter(
         Shift.shift_date >= start_date,
@@ -809,12 +709,16 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     
     # Calculate metrics
     total_scheduled_minutes = sum(s.get_duration_hours() * 60 for s in shifts)
-    total_break_minutes = sum(b.duration_minutes or 0 for b in breaks if b.end_time)
-    total_allowed_break_minutes = sum(b.get_allowed_duration() for b in breaks if b.end_time)
+    
+    # Exclude punch_in and punch_out from break calculations
+    regular_breaks = [b for b in breaks if b.break_type not in ['punch_in', 'punch_out']]
+    
+    total_break_minutes = sum(b.duration_minutes or 0 for b in regular_breaks if b.end_time)
+    total_allowed_break_minutes = sum(b.get_allowed_duration() for b in regular_breaks if b.end_time)
     exceeding_break_minutes = max(0, total_break_minutes - total_allowed_break_minutes)
     
-    # Count incidents (overdue breaks)
-    incidents = sum(1 for b in breaks if b.is_overdue)
+    # Count incidents (overdue breaks) - exclude punch_in/punch_out
+    incidents = sum(1 for b in regular_breaks if b.is_overdue)
     
     # Count emergency breaks
     emergency_count = sum(1 for b in breaks if b.break_type == 'emergency')
@@ -824,7 +728,7 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     for b in breaks:
         break_counts[b.break_type] = break_counts.get(b.break_type, 0) + 1
     
-    # Count specific break types for reporting
+    # Extract specific counts for reporting
     lunch_count = break_counts.get('lunch', 0)
     coaching_count = break_counts.get('coaching_aya', 0) + break_counts.get('coaching_mostafa', 0)
     overtime_count = break_counts.get('overtime', 0)
@@ -835,8 +739,8 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     # These are legitimate work activities that shouldn't reduce utilization
     utilization_break_minutes = sum(
         b.duration_minutes or 0 
-        for b in breaks 
-        if b.end_time and b.break_type not in ['lunch', 'emergency', 'overtime', 'punch_in', 'punch_out']
+        for b in regular_breaks 
+        if b.end_time and b.break_type not in ['lunch', 'emergency', 'overtime']
     )
     
     # Time worked = scheduled time - break time (excluding lunch, emergency, overtime)
@@ -963,16 +867,16 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         'exceeding_break_minutes': exceeding_break_minutes,
         'incidents': incidents,
         'emergency_count': emergency_count,
-        'total_breaks': len(breaks),
+        'total_breaks': len(regular_breaks),  # Exclude punch_in/punch_out from total
         'completed_breaks': total_completed_breaks,
-        'lunch_count': lunch_count,
-        'coaching_count': coaching_count,
-        'overtime_count': overtime_count,
-        'compensation_count': compensation_count,
         'utilization': round(utilization, 1),
         'adherence': round(adherence, 1),
         'conformance': round(conformance, 1),
         'break_counts': break_counts,
+        'lunch_count': lunch_count,
+        'coaching_count': coaching_count,
+        'overtime_count': overtime_count,
+        'compensation_count': compensation_count,
         'shifts_count': len(shifts)
     }
 
@@ -1077,7 +981,7 @@ def export_report():
     bad_fill = PatternFill(start_color="ffc7ce", end_color="ffc7ce", fill_type="solid")
     
     # Title
-    ws.merge_cells('A1:Q1')
+    ws.merge_cells('A1:M1')
     ws['A1'] = f"RTA Agent Metrics Report ({start_date} to {end_date})"
     ws['A1'].font = Font(bold=True, size=14)
     ws['A1'].alignment = Alignment(horizontal="center")
@@ -1093,10 +997,6 @@ def export_report():
         "Exceeding (min)",
         "Incidents",
         "Emergency",
-        "Lunch",
-        "Coaching",
-        "Overtime",
-        "Compensation",
         "Utilization %",
         "Adherence %",
         "Conformance %",
@@ -1150,10 +1050,6 @@ def export_report():
             metrics['exceeding_break_minutes'],
             metrics['incidents'],
             metrics['emergency_count'],
-            metrics.get('lunch_count', 0),
-            metrics.get('coaching_count', 0),
-            metrics.get('overtime_count', 0),
-            metrics.get('compensation_count', 0),
             metrics['utilization'],
             metrics['adherence'],
             metrics['conformance'],
@@ -1164,7 +1060,7 @@ def export_report():
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = cell_alignment
             cell.border = border
-            if col == 17:  # Status column
+            if col == 13:  # Status column
                 cell.fill = status_fill
         
         # Accumulate totals
@@ -1201,10 +1097,6 @@ def export_report():
         total_metrics['exceeding'],
         total_metrics['incidents'],
         total_metrics['emergency'],
-        "",  # Lunch (not summed)
-        "",  # Coaching (not summed)
-        "",  # Overtime (not summed)
-        "",  # Compensation (not summed)
         avg_util,
         avg_adh,
         avg_conf,
@@ -1262,24 +1154,12 @@ def export_report():
 
 def create_app():
     """Initialize database - called on startup"""
-    try:
-        with app.app_context():
-            init_db()
-    except Exception as e:
-        print(f"⚠️  [WARNING] Database initialization error: {e}")
-        print("⚠️  App will continue, but database operations may fail")
-        import traceback
-        traceback.print_exc()
+    with app.app_context():
+        init_db()
     return app
 
 # Initialize on import (for gunicorn)
-try:
-    create_app()
-except Exception as e:
-    print(f"❌ [CRITICAL] Failed to initialize app: {e}")
-    import traceback
-    traceback.print_exc()
-    # Don't raise - let gunicorn handle it
+create_app()
 
 # ==================== MAIN ====================
 

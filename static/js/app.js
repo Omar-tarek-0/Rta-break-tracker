@@ -525,98 +525,6 @@ async function createAgent() {
     }
 }
 
-// ==================== AGENT MANAGEMENT ====================
-
-let deleteAgentId = null;
-
-async function showAgentList() {
-    const modal = document.getElementById('agentListModal');
-    const container = document.getElementById('agentListContainer');
-    
-    modal.style.display = 'flex';
-    container.innerHTML = '<div class="loading">Loading agents...</div>';
-    
-    try {
-        const response = await fetch('/api/agents');
-        const data = await response.json();
-        
-        if (data.error) {
-            container.innerHTML = '<div class="error-message">' + data.error + '</div>';
-            return;
-        }
-        
-        if (data.agents.length === 0) {
-            container.innerHTML = '<div class="empty-message">No agents found. Add your first agent!</div>';
-            return;
-        }
-        
-        container.innerHTML = data.agents.map(agent => `
-            <div class="agent-list-item">
-                <div class="agent-list-info">
-                    <span class="agent-list-name">👤 ${agent.full_name}</span>
-                    <span class="agent-list-username">@${agent.username}</span>
-                </div>
-                <button class="btn btn-danger btn-sm" onclick="showDeleteAgentModal(${agent.id}, '${agent.full_name}')">
-                    🗑️ Delete
-                </button>
-            </div>
-        `).join('');
-        
-    } catch (err) {
-        container.innerHTML = '<div class="error-message">Failed to load agents: ' + err.message + '</div>';
-    }
-}
-
-function hideAgentList() {
-    document.getElementById('agentListModal').style.display = 'none';
-}
-
-function showDeleteAgentModal(agentId, agentName) {
-    deleteAgentId = agentId;
-    document.getElementById('deleteAgentMessage').textContent = 
-        `Are you sure you want to delete agent "${agentName}"?`;
-    document.getElementById('deleteAgentModal').style.display = 'flex';
-}
-
-function hideDeleteAgentModal() {
-    document.getElementById('deleteAgentModal').style.display = 'none';
-    deleteAgentId = null;
-}
-
-async function confirmDeleteAgent() {
-    if (!deleteAgentId) return;
-    
-    const btn = document.getElementById('confirmDeleteBtn');
-    btn.disabled = true;
-    btn.textContent = 'Deleting...';
-    
-    try {
-        const response = await fetch(`/api/agent/${deleteAgentId}/delete`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            hideDeleteAgentModal();
-            showAgentList(); // Refresh the list
-            // Show success message
-            alert(`✅ ${data.message}\n\nDeleted:\n- ${data.deleted.user} user\n- ${data.deleted.shifts} shifts\n- ${data.deleted.breaks} break records`);
-            // Reload page to update agent count
-            location.reload();
-        } else {
-            alert('❌ Error: ' + data.error);
-            btn.disabled = false;
-            btn.textContent = '🗑️ Delete Agent';
-        }
-    } catch (err) {
-        alert('❌ Network error: ' + err.message);
-        btn.disabled = false;
-        btn.textContent = '🗑️ Delete Agent';
-    }
-}
-
 function showImage(src, title) {
     document.getElementById('modalImage').src = src;
     document.getElementById('imageModalTitle').textContent = title;
@@ -665,10 +573,25 @@ function setShiftTemplate(start, end) {
 
 function selectAllAgents() {
     document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = true);
+    if (document.getElementById('selectAllAgents')) {
+        document.getElementById('selectAllAgents').checked = true;
+    }
 }
 
 function deselectAllAgents() {
     document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false);
+    if (document.getElementById('selectAllAgents')) {
+        document.getElementById('selectAllAgents').checked = false;
+    }
+}
+
+function toggleAllAgents() {
+    const selectAll = document.getElementById('selectAllAgents');
+    if (selectAll && selectAll.checked) {
+        selectAllAgents();
+    } else {
+        deselectAllAgents();
+    }
 }
 
 async function saveBulkShifts() {
@@ -742,12 +665,176 @@ async function saveBulkShifts() {
     }
 }
 
+// ==================== SCHEDULES VIEW ====================
+
+function showSchedulesView() {
+    document.getElementById('schedulesModal').style.display = 'flex';
+    // Set default dates (today to 2 weeks from today)
+    const today = new Date();
+    const twoWeeksLater = new Date(today);
+    twoWeeksLater.setDate(twoWeeksLater.getDate() + 13); // 14 days total
+    
+    document.getElementById('scheduleViewStartDate').value = formatDate(today);
+    document.getElementById('scheduleViewEndDate').value = formatDate(twoWeeksLater);
+    
+    // Auto-load schedules
+    loadSchedules();
+}
+
+function hideSchedulesView() {
+    document.getElementById('schedulesModal').style.display = 'none';
+}
+
+function setScheduleViewRange(period) {
+    const today = new Date();
+    let startDate, endDate;
+    
+    if (period === 'today') {
+        startDate = endDate = today;
+    } else if (period === 'week') {
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 6); // End of week
+    } else if (period === 'month') {
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    }
+    
+    document.getElementById('scheduleViewStartDate').value = formatDate(startDate);
+    document.getElementById('scheduleViewEndDate').value = formatDate(endDate);
+    loadSchedules();
+}
+
+async function loadSchedules() {
+    const startDate = document.getElementById('scheduleViewStartDate').value;
+    const endDate = document.getElementById('scheduleViewEndDate').value;
+    
+    if (!startDate || !endDate) {
+        document.getElementById('schedulesError').textContent = '⚠️ Please select a date range';
+        document.getElementById('schedulesError').style.display = 'block';
+        return;
+    }
+    
+    const tbody = document.getElementById('schedulesTableBody');
+    const loading = document.getElementById('schedulesLoading');
+    const error = document.getElementById('schedulesError');
+    const summary = document.getElementById('schedulesSummary');
+    
+    tbody.innerHTML = '';
+    loading.style.display = 'block';
+    error.style.display = 'none';
+    summary.style.display = 'none';
+    
+    try {
+        const response = await fetch(`/api/shifts?start_date=${startDate}&end_date=${endDate}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            error.textContent = '⚠️ ' + data.error;
+            error.style.display = 'block';
+            loading.style.display = 'none';
+            return;
+        }
+        
+        loading.style.display = 'none';
+        
+        if (data.shifts && data.shifts.length > 0) {
+            // Group shifts by agent
+            const shiftsByAgent = {};
+            data.shifts.forEach(shift => {
+                if (!shiftsByAgent[shift.agent_name]) {
+                    shiftsByAgent[shift.agent_name] = [];
+                }
+                shiftsByAgent[shift.agent_name].push(shift);
+            });
+            
+            // Sort agents by name
+            const agentNames = Object.keys(shiftsByAgent).sort();
+            
+            tbody.innerHTML = '';
+            agentNames.forEach(agentName => {
+                const agentShifts = shiftsByAgent[agentName].sort((a, b) => {
+                    return new Date(a.shift_date) - new Date(b.shift_date);
+                });
+                
+                agentShifts.forEach((shift, index) => {
+                    const row = document.createElement('tr');
+                    const shiftDate = new Date(shift.shift_date);
+                    const formattedDate = shiftDate.toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                    });
+                    
+                    row.innerHTML = `
+                        <td>${index === 0 ? `<strong>${shift.agent_name}</strong>` : ''}</td>
+                        <td>${formattedDate}</td>
+                        <td>${formatTime(shift.start_time)}</td>
+                        <td>${formatTime(shift.end_time)}</td>
+                        <td>${shift.duration_hours.toFixed(1)}h</td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${shift.id})" title="Delete shift">
+                                🗑️
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            });
+            
+            document.getElementById('schedulesCount').textContent = data.total;
+            summary.style.display = 'block';
+        } else {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-message">No schedules found for the selected date range</td></tr>';
+        }
+    } catch (err) {
+        error.textContent = '⚠️ Error loading schedules: ' + err.message;
+        error.style.display = 'block';
+        loading.style.display = 'none';
+    }
+}
+
+function formatTime(timeStr) {
+    // Convert "HH:MM" to "HH:MM AM/PM"
+    const [hours, minutes] = timeStr.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
+}
+
+async function deleteSchedule(shiftId) {
+    if (!confirm('Are you sure you want to delete this shift?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/shift/${shiftId}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            // Reload schedules
+            loadSchedules();
+        }
+    } catch (err) {
+        alert('Error deleting shift: ' + err.message);
+    }
+}
+
 // Close modals on escape
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         hideAddAgentModal();
         hideImageModal();
         hideShiftModal();
+        hideSchedulesView();
     }
 });
 
@@ -831,14 +918,14 @@ async function loadMetrics() {
     }
     
     const tbody = document.getElementById('metricsTableBody');
-    tbody.innerHTML = '<tr><td colspan="13" class="loading">Loading metrics...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="15" class="loading">Loading metrics...</td></tr>';
     
     try {
         const response = await fetch(`/api/report/metrics?start_date=${startDate}&end_date=${endDate}`);
         const data = await response.json();
         
         if (data.error) {
-            tbody.innerHTML = `<tr><td colspan="13" class="error-message">${data.error}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="15" class="error-message">${data.error}</td></tr>`;
             return;
         }
         
