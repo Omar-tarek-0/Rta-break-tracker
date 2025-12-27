@@ -736,27 +736,33 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     
     # Calculate utilization (time worked / expected working time)
     # Working hours = 8 hours per shift
-    # 1 hour break is allocated per shift (not counted as working time)
-    # Exclude lunch, emergency, and overtime from utilization calculation
-    # These are legitimate work activities that shouldn't reduce utilization
-    utilization_break_minutes = sum(
-        b.duration_minutes or 0 
-        for b in regular_breaks 
-        if b.end_time and b.break_type not in ['lunch', 'emergency', 'overtime']
-    )
+    # Expected break time per shift: 15 min (break 1) + 30 min (lunch) + 15 min (break 2) = 60 minutes
+    # Emergency is capped at 15 minutes and included in break time
+    # Overtime is excluded (it's additional work, not a break)
+    
+    # Calculate all break time including lunch and emergency (but exclude overtime)
+    # Emergency duration is capped at 15 minutes per break
+    utilization_break_minutes = 0
+    for b in regular_breaks:
+        if b.end_time and b.break_type != 'overtime':
+            if b.break_type == 'emergency':
+                # Cap emergency at 15 minutes
+                utilization_break_minutes += min(b.duration_minutes or 0, 15)
+            else:
+                utilization_break_minutes += b.duration_minutes or 0
     
     # Calculate expected working time: 8 hours per shift (480 minutes)
-    # Each shift is typically 9 hours total (8 working + 1 hour allocated break)
-    # But utilization is based on 8 working hours, not the full shift duration
+    # Expected break time: 60 minutes per shift (15 + 30 + 15)
+    # Total shift: 9 hours (540 minutes) = 8 working hours + 1 hour break
     expected_working_minutes = len(shifts) * 8 * 60  # 8 hours per shift = 480 minutes
+    expected_break_minutes = len(shifts) * 60  # 60 minutes per shift (15 + 30 + 15)
     
-    # Actual time worked = total scheduled time - break time (excluding lunch, emergency, overtime)
+    # Actual time worked = total scheduled time - actual break time (including lunch and emergency)
     # Note: total_scheduled_minutes includes the full shift (e.g., 9 hours = 540 minutes)
-    # But we calculate utilization against expected working time (8 hours = 480 minutes)
     if expected_working_minutes > 0:
         time_worked = total_scheduled_minutes - utilization_break_minutes
         # Utilization = (actual working time / expected working time) * 100
-        # Expected working time is 8 hours per shift, regardless of total shift duration
+        # Expected working time is 8 hours per shift
         utilization = (time_worked / expected_working_minutes) * 100
     else:
         utilization = 0

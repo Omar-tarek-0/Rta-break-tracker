@@ -55,7 +55,7 @@ BREAK_DURATIONS = {
     "lunch": 30,
     "meeting": 60,
     "huddle": 15,
-    "emergency": 10
+    "emergency": 15
 }
 
 # Break display info
