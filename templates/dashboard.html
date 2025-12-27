@@ -99,15 +99,108 @@
             </div>
         </aside>
         
-        <!-- Main: Break Records -->
+        <!-- Main: Break Records & Reports -->
         <main class="main-area">
-            <div class="main-header">
-                <h2>📋 Break Records</h2>
-                <span id="recordsCount" class="records-count"></span>
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="breaks" onclick="switchTab('breaks')">📋 Break Records</button>
+                <button class="tab-btn" data-tab="reports" onclick="switchTab('reports')">📊 Reports & Export</button>
             </div>
             
-            <div id="breaksContainer" class="breaks-container">
-                <div class="loading">Loading breaks...</div>
+            <!-- Break Records Tab -->
+            <div id="tab-breaks" class="tab-content active">
+                <div class="main-header">
+                    <h2>📋 Break Records</h2>
+                    <span id="recordsCount" class="records-count"></span>
+                </div>
+                
+                <div id="breaksContainer" class="breaks-container">
+                    <div class="loading">Loading breaks...</div>
+                </div>
+            </div>
+            
+            <!-- Reports & Export Tab -->
+            <div id="tab-reports" class="tab-content" style="display: none;">
+                <div class="main-header">
+                    <h2>📊 Reports & Export</h2>
+                </div>
+                
+                <div class="reports-section">
+                    <!-- Date Range -->
+                    <div class="report-controls">
+                        <div class="form-group">
+                            <label>📅 Date Range</label>
+                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                <input type="date" id="reportStartDate" class="form-input">
+                                <span>to</span>
+                                <input type="date" id="reportEndDate" class="form-input">
+                                <button class="btn btn-sm" onclick="setReportPeriod('today')">Today</button>
+                                <button class="btn btn-sm" onclick="setReportPeriod('week')">7 Days</button>
+                                <button class="btn btn-sm" onclick="setReportPeriod('month')">30 Days</button>
+                                <button class="btn btn-primary" onclick="loadMetrics()">🔍 Generate Report</button>
+                                <button class="btn btn-success" onclick="exportToExcel()">📥 Export to Excel</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Summary Cards -->
+                    <div class="summary-cards" id="summaryCards" style="display: none;">
+                        <div class="summary-card">
+                            <div class="summary-label">Avg Utilization</div>
+                            <div class="summary-value" id="avgUtilization">0%</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Avg Adherence</div>
+                            <div class="summary-value" id="avgAdherence">0%</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Avg Conformance</div>
+                            <div class="summary-value" id="avgConformance">0%</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Incidents</div>
+                            <div class="summary-value" id="totalIncidents">0</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Exceeding</div>
+                            <div class="summary-value" id="totalExceeding">0 min</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Total Emergency</div>
+                            <div class="summary-value" id="totalEmergency">0</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Metrics Table -->
+                    <div class="metrics-table-container" style="margin-top: 20px;">
+                        <table class="data-table" style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>Agent Name</th>
+                                    <th>Scheduled Hours</th>
+                                    <th>Total Breaks</th>
+                                    <th>Break Time</th>
+                                    <th>Exceeding</th>
+                                    <th>Incidents</th>
+                                    <th>Emergency</th>
+                                    <th>Lunch</th>
+                                    <th>Coaching</th>
+                                    <th>Overtime</th>
+                                    <th>Compensation</th>
+                                    <th>Utilization %</th>
+                                    <th>Adherence %</th>
+                                    <th>Conformance %</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="metricsTableBody">
+                                <tr>
+                                    <td colspan="15" class="empty-message">Select date range and click "Generate Report"</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
