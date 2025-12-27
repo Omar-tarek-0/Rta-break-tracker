@@ -1154,12 +1154,20 @@ def export_report():
 
 def create_app():
     """Initialize database - called on startup"""
-    with app.app_context():
-        init_db()
+    try:
+        with app.app_context():
+            init_db()
+    except Exception as e:
+        print(f"⚠️ Warning: Database initialization failed: {e}")
+        print("⚠️ App will continue, but database features may not work.")
     return app
 
 # Initialize on import (for gunicorn)
-create_app()
+try:
+    create_app()
+except Exception as e:
+    print(f"⚠️ Warning: App initialization error: {e}")
+    print("⚠️ App will continue, but some features may not work.")
 
 # ==================== MAIN ====================
 
