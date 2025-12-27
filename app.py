@@ -734,7 +734,9 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     overtime_count = break_counts.get('overtime', 0)
     compensation_count = break_counts.get('compensation', 0)
     
-    # Calculate utilization (time worked / scheduled time)
+    # Calculate utilization (time worked / expected working time)
+    # Working hours = 8 hours per shift
+    # 1 hour break is allocated per shift (not counted as working time)
     # Exclude lunch, emergency, and overtime from utilization calculation
     # These are legitimate work activities that shouldn't reduce utilization
     utilization_break_minutes = sum(
@@ -743,10 +745,19 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         if b.end_time and b.break_type not in ['lunch', 'emergency', 'overtime']
     )
     
-    # Time worked = scheduled time - break time (excluding lunch, emergency, overtime)
-    if total_scheduled_minutes > 0:
+    # Calculate expected working time: 8 hours per shift (480 minutes)
+    # Each shift is typically 9 hours total (8 working + 1 hour allocated break)
+    # But utilization is based on 8 working hours, not the full shift duration
+    expected_working_minutes = len(shifts) * 8 * 60  # 8 hours per shift = 480 minutes
+    
+    # Actual time worked = total scheduled time - break time (excluding lunch, emergency, overtime)
+    # Note: total_scheduled_minutes includes the full shift (e.g., 9 hours = 540 minutes)
+    # But we calculate utilization against expected working time (8 hours = 480 minutes)
+    if expected_working_minutes > 0:
         time_worked = total_scheduled_minutes - utilization_break_minutes
-        utilization = (time_worked / total_scheduled_minutes) * 100
+        # Utilization = (actual working time / expected working time) * 100
+        # Expected working time is 8 hours per shift, regardless of total shift duration
+        utilization = (time_worked / expected_working_minutes) * 100
     else:
         utilization = 0
     
