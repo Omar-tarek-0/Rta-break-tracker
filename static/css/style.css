@@ -12,6 +12,8 @@
     --text: #333333;
     --text-secondary: #666666;
     --border: #e0e0e0;
+    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-primary-hover: linear-gradient(135deg, #5568d3 0%, #653a8f 100%);
 }
 
 * {
@@ -22,7 +24,8 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background-color: var(--background);
+    background: linear-gradient(135deg, #f5f5f5 0%, #f0f0f5 50%, #f5f5f5 100%);
+    background-attachment: fixed;
     color: var(--text);
     min-height: 100vh;
 }
@@ -43,8 +46,10 @@ body {
     padding: 40px;
     width: 100%;
     max-width: 400px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.2);
     border: 1px solid var(--border);
+    border-top: 4px solid;
+    border-image: var(--gradient-primary) 1;
 }
 
 .login-header {
@@ -130,11 +135,16 @@ body {
 }
 
 .btn-primary {
-    background: var(--primary);
+    background: var(--gradient-primary);
+    color: #ffffff;
+    border: none;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .btn-primary:hover {
-    background: var(--primary-hover);
+    background: var(--gradient-primary-hover);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    transform: translateY(-1px);
 }
 
 .btn-success {
@@ -146,7 +156,15 @@ body {
 }
 
 .btn-secondary {
-    background: #9c27b0;
+    background: var(--gradient-primary);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.btn-secondary:hover {
+    background: var(--gradient-primary-hover);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    transform: translateY(-1px);
 }
 
 .btn-block {
@@ -181,7 +199,9 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 15px 25px;
-    background: var(--surface);
+    background: var(--gradient-primary);
+    color: #ffffff;
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
 }
 
 .header-left {
@@ -193,10 +213,11 @@ body {
 .header-left h1 {
     font-size: 18px;
     font-weight: 700;
+    color: #ffffff;
 }
 
 .header-date {
-    color: var(--text-secondary);
+    color: rgba(255, 255, 255, 0.9);
     font-size: 13px;
 }
 
@@ -208,6 +229,7 @@ body {
 
 .user-info {
     font-size: 14px;
+    color: #ffffff;
 }
 
 .badge {
@@ -218,7 +240,8 @@ body {
 }
 
 .badge-primary {
-    background: var(--primary);
+    background: var(--gradient-primary);
+    color: #ffffff;
 }
 
 /* ==================== APP CONTAINER ==================== */
@@ -260,12 +283,15 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 15px 20px;
-    border-bottom: 1px solid var(--border);
+    background: var(--gradient-primary);
+    color: #ffffff;
+    border-bottom: none;
 }
 
 .panel-header h3 {
     font-size: 16px;
     font-weight: 600;
+    color: #ffffff;
 }
 
 /* ==================== STATUS BOX ==================== */
@@ -746,18 +772,22 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 15px 20px;
-    border-bottom: 1px solid var(--border);
+    background: var(--gradient-primary);
+    color: #ffffff;
+    border-bottom: none;
+    border-radius: 15px 15px 0 0;
 }
 
 .modal-header h3 {
     font-size: 16px;
     font-weight: 600;
+    color: #ffffff;
 }
 
 .modal-close {
     background: none;
     border: none;
-    color: var(--text);
+    color: #ffffff;
     font-size: 24px;
     cursor: pointer;
 }
