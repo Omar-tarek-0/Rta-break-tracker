@@ -273,10 +273,11 @@ def agent_view():
     if current_user.is_rtm():
         return redirect(url_for('dashboard'))
     
-    # Get active break for this agent
-    active_break = BreakRecord.query.filter_by(
-        agent_id=current_user.id,
-        end_time=None
+    # Get active break for this agent (exclude punch_in/punch_out - these are attendance, not breaks)
+    active_break = BreakRecord.query.filter(
+        BreakRecord.agent_id == current_user.id,
+        BreakRecord.end_time == None,
+        BreakRecord.break_type.notin_(['punch_in', 'punch_out'])
     ).first()
     
     # Get today's breaks
