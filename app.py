@@ -742,86 +742,70 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     overtime_count = break_counts.get('overtime', 0)
     compensation_count = break_counts.get('compensation', 0)
     
-    # Calculate utilization (time worked / expected working time)
-    # Working hours = 8 hours per shift
-    # Expected break time per shift: 15 min (break 1) + 30 min (lunch) + 15 min (break 2) = 60 minutes
-    # Emergency is capped at 15 minutes and included in break time
-    # Overtime is excluded (it's additional work, not a break)
+    # ==================== UTILIZATION CALCULATION ====================
+    # Utilization: Working hours = 8 hours, Break = 1 hour allocated
+    # If agent worked 8 hours and took 1 hour break = 100% utilization
+    # If agent took emergency (or any break) that exceeds the 1 hour allocated break, 
+    # that reduces the utilization because working time decreases
     
-    # Calculate all break time including lunch and emergency (but exclude overtime)
-    # Emergency duration is capped at 15 minutes per break
+    # Calculate all break time (excluding overtime and compensation - these are work, not breaks)
+    # Include: short, lunch, emergency, meeting, huddle, coaching, etc.
     utilization_break_minutes = 0
     for b in regular_breaks:
-        if b.end_time and b.break_type != 'overtime':
-            if b.break_type == 'emergency':
-                # Cap emergency at 15 minutes
-                utilization_break_minutes += min(b.duration_minutes or 0, 15)
-            else:
-                utilization_break_minutes += b.duration_minutes or 0
+        if b.end_time and b.break_type not in ['overtime', 'compensation']:
+            utilization_break_minutes += b.duration_minutes or 0
     
-    # Calculate expected working time: 8 hours per shift (480 minutes)
-    # Expected break time: 60 minutes per shift (15 + 30 + 15)
-    # Total shift: 9 hours (540 minutes) = 8 working hours + 1 hour allocated break
+    # Expected working time: 8 hours per shift (480 minutes)
+    # Expected break time: 1 hour per shift (60 minutes) - allocated for breaks
     expected_working_minutes = len(shifts) * 8 * 60  # 8 hours per shift = 480 minutes
-    expected_break_minutes = len(shifts) * 60  # 60 minutes per shift (15 + 30 + 15)
+    expected_break_minutes = len(shifts) * 60  # 60 minutes per shift (allocated break time)
     
-    # Calculate actual time worked
-    # The total_scheduled_minutes includes the full shift (e.g., 9 hours = 540 minutes)
-    # Expected working time = 8 hours (480 minutes) per shift
-    # Expected break time = 1 hour (60 minutes) per shift - this is allocated for breaks
-    # 
-    # Logic: A 9-hour shift = 8 working hours + 1 hour allocated for breaks
-    # If an agent works the full 9 hours with 0 breaks, they're working during their allocated break time
-    # So: actual_working_time = total_scheduled_minutes - utilization_break_minutes
-    # But we should only count up to expected_working_minutes for utilization calculation
-    # This means: if they work 8 hours (expected), utilization = 100%
-    #            if they work 9 hours (no breaks), utilization = 100% (capped, not 112.5%)
+    # Calculate actual working time
+    # Formula: actual_working_time = expected_working_time - (actual_break_time - expected_break_time)
+    #         = expected_working_time - excess_break_time
+    # If breaks <= 1 hour: actual_working_time = 8 hours (100% utilization)
+    # If breaks > 1 hour: actual_working_time = 8 hours - (excess break time) (< 100% utilization)
     if expected_working_minutes > 0:
-        # Calculate time worked: scheduled time minus actual breaks taken
-        time_worked_raw = total_scheduled_minutes - utilization_break_minutes
+        # Calculate excess break time (breaks beyond the allocated 1 hour)
+        excess_break_minutes = max(0, utilization_break_minutes - expected_break_minutes)
         
-        # The allocated break time (1 hour) is part of the scheduled time but not counted as working time
-        # So we need to subtract the expected break time from the calculation
-        # This ensures that working the expected 8 hours gives 100% utilization
-        # Formula: actual_working_time = (total_scheduled - expected_break_time) - actual_break_time
-        #          = expected_working_time - actual_break_time
-        actual_working_time = expected_working_minutes - utilization_break_minutes
+        # Actual working time = expected working time - excess break time
+        actual_working_time = expected_working_minutes - excess_break_minutes
         
         # Utilization = (actual working time / expected working time) * 100
-        # This will be 100% if no breaks are taken, and less if breaks exceed allocated time
         utilization = (actual_working_time / expected_working_minutes) * 100
     else:
         utilization = 0
     
-    # Calculate adherence based on:
-    # 1. Break durations (actual vs allowed)
-    # 2. Punch in time vs shift start time
-    # 3. Punch out time vs shift end time
+    # ==================== ADHERENCE CALCULATION ====================
+    # Adherence: Based on break durations and shift timing
+    # 1. Break duration adherence: If agent took break 1 for 16 mins (allowed 15 mins), adherence is reduced
+    # 2. Shift timing adherence: If agent came/punched in on assigned shift time, they're adhering
     
     adherence_scores = []
     
     # 1. Break duration adherence
-    total_completed_breaks = len([b for b in breaks if b.end_time and b.break_type not in ['punch_in', 'punch_out']])
+    # For each break, check if actual duration <= allowed duration
+    # If exceeded, calculate penalty: (allowed_duration / actual_duration) * 100
+    total_completed_breaks = len([b for b in breaks if b.end_time and b.break_type not in ['punch_in', 'punch_out', 'overtime', 'compensation']])
     
     if total_completed_breaks > 0:
         for b in breaks:
-            if b.end_time and b.duration_minutes is not None and b.break_type not in ['punch_in', 'punch_out']:
+            if b.end_time and b.duration_minutes is not None and b.break_type not in ['punch_in', 'punch_out', 'overtime', 'compensation']:
                 allowed_duration = b.get_allowed_duration()
                 if allowed_duration > 0:
-                    # Calculate adherence for this break
-                    # If they took less or equal to allowed time, 100% adherence
-                    # If they exceeded, calculate as allowed / actual (penalty for exceeding)
                     actual_duration = b.duration_minutes
                     if actual_duration <= allowed_duration:
+                        # Within allowed time = 100% adherence
                         break_adherence = 100.0
                     else:
-                        # Penalty: adherence decreases when exceeding allowed time
-                        # Formula: (allowed_duration / actual_duration) * 100
+                        # Exceeded allowed time = penalty
+                        # Example: 15 mins allowed, 16 mins taken = (15/16) * 100 = 93.75%
                         break_adherence = (allowed_duration / actual_duration) * 100
                     adherence_scores.append(break_adherence)
     
-    # 2. Punch in/out adherence based on shift times
-    # Group shifts by date for easier lookup
+    # 2. Shift timing adherence (punch in/out vs assigned shift times)
+    # If agent came/punched in on assigned shift time, they're adhering
     shifts_by_date = {s.shift_date: s for s in shifts}
     
     # Group punch in/out by date
@@ -837,7 +821,7 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     for shift_date, shift in shifts_by_date.items():
         punch_records = punch_records_by_date.get(shift_date, {})
         
-        # Punch in adherence
+        # Punch in adherence: Did agent punch in on assigned shift time?
         if 'punch_in' in punch_records:
             punch_in = punch_records['punch_in']
             punch_in_time = punch_in.start_time.time()
@@ -855,14 +839,13 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
             else:
                 # Penalty: decrease adherence for being late/early
                 # Max penalty at 30 minutes = 0% adherence
-                # Formula: max(0, (30 - time_diff) / 30 * 100)
                 punch_in_adherence = max(0, (30 - time_diff_minutes) / 30 * 100)
             adherence_scores.append(punch_in_adherence)
         else:
             # No punch in = 0% adherence for that day
             adherence_scores.append(0.0)
         
-        # Punch out adherence
+        # Punch out adherence: Did agent punch out on assigned shift time?
         if 'punch_out' in punch_records:
             punch_out = punch_records['punch_out']
             punch_out_time = punch_out.start_time.time()
@@ -883,7 +866,6 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
                 punch_out_adherence = 100.0
             else:
                 # Penalty: decrease adherence for being late/early
-                # Max penalty at 30 minutes = 0% adherence
                 punch_out_adherence = max(0, (30 - time_diff_minutes) / 30 * 100)
             adherence_scores.append(punch_out_adherence)
         else:
@@ -896,10 +878,41 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     else:
         adherence = 100  # No data = 100% adherence (default)
     
-    # Conformance (similar to adherence but measures schedule following)
-    # For simplicity: conformance = did agent have shifts and follow them
+    # ==================== CONFORMANCE CALCULATION ====================
+    # Conformance: Agent should work 8 hours per day
+    # If they worked exactly 8 hours = 100% conformance
+    # If they worked 7.59 hours = reduced conformance
+    # If they worked more than 8 hours but didn't come on shift, but used compensation aux 
+    # to make up missing minutes to reach 8 hours, it should count for conformance
+    # Formula: Conformance = (actual working hours / 8 hours) × 100
+    # Compensation aux counts toward the 8 hours
+    
     if len(shifts) > 0:
-        conformance = adherence  # Using same logic for now
+        # Calculate actual working hours
+        # Working time = shift duration - break time + compensation time
+        # Compensation aux counts as working time (to compensate for missing minutes)
+        
+        # Get compensation time (compensation aux counts toward working hours)
+        compensation_minutes = sum(
+            b.duration_minutes or 0 
+            for b in breaks 
+            if b.break_type == 'compensation' and b.end_time
+        )
+        
+        # Calculate actual working time
+        # Formula: actual_working_hours = (shift_duration - break_time) + compensation_time
+        # But we need to account for the fact that shift duration includes allocated break time
+        # So: actual_working_hours = expected_working_hours - excess_break_time + compensation_time
+        
+        # Calculate excess break time (breaks beyond allocated 1 hour)
+        excess_break_minutes = max(0, utilization_break_minutes - expected_break_minutes)
+        
+        # Actual working hours = expected working hours - excess breaks + compensation
+        actual_working_minutes = expected_working_minutes - excess_break_minutes + compensation_minutes
+        
+        # Conformance = (actual working hours / 8 hours) × 100
+        # Cap at 100% (can't exceed 100% conformance)
+        conformance = min(100.0, (actual_working_minutes / expected_working_minutes) * 100)
     else:
         conformance = 0  # No shifts assigned = 0% conformance
     
