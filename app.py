@@ -398,12 +398,20 @@ def get_breaks():
     
     breaks = query.order_by(BreakRecord.start_time.desc()).all()
     
-    # Group by agent
+    # Group by agent and determine status
     agents_data = {}
     for br in breaks:
         if br.agent_id not in agents_data:
+            # Check if agent has an active break
+            active_break = BreakRecord.query.filter_by(
+                agent_id=br.agent_id,
+                end_time=None
+            ).first()
+            
             agents_data[br.agent_id] = {
                 'agent_name': br.agent.full_name,
+                'agent_status': 'on_break' if active_break else 'available',
+                'active_break_type': active_break.break_type if active_break else None,
                 'breaks': []
             }
         agents_data[br.agent_id]['breaks'].append(br.to_dict())

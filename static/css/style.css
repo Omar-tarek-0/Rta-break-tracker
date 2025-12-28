@@ -760,9 +760,34 @@ body {
     border-bottom: 1px solid var(--border);
 }
 
+.agent-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
 .agent-name {
     font-size: 15px;
     font-weight: 600;
+}
+
+.agent-status-badge {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.agent-status-badge.status-available {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.agent-status-badge.status-on-break {
+    background: #fff3e0;
+    color: #e65100;
 }
 
 .break-count {

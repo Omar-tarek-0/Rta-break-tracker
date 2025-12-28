@@ -396,9 +396,24 @@ function createAgentCard(agent) {
     card.className = 'agent-card';
     card.dataset.agentName = agent.agent_name.toLowerCase();
     
+    // Determine status badge
+    let statusBadge = '';
+    if (agent.agent_status === 'on_break') {
+        const breakType = agent.active_break_type || 'break';
+        const breakEmoji = breakType === 'lunch' ? '🍽️' : 
+                          breakType === 'emergency' ? '🚨' : 
+                          breakType === 'short' ? '☕' : '⏳';
+        statusBadge = `<span class="agent-status-badge status-on-break">${breakEmoji} On Break</span>`;
+    } else {
+        statusBadge = `<span class="agent-status-badge status-available">🟢 Available</span>`;
+    }
+    
     card.innerHTML = `
         <div class="agent-card-header">
-            <span class="agent-name">👤 ${agent.agent_name}</span>
+            <div class="agent-header-left">
+                <span class="agent-name">👤 ${agent.agent_name}</span>
+                ${statusBadge}
+            </div>
             <span class="break-count">📋 ${agent.breaks.length} break(s)</span>
         </div>
         <div class="agent-breaks">
