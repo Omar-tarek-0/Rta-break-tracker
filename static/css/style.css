@@ -979,6 +979,16 @@ body {
     margin-top: 10px;
 }
 
+.success-message {
+    color: var(--success);
+    font-size: 12px;
+    margin-top: 10px;
+    padding: 10px;
+    background: #e8f5e9;
+    border-radius: 6px;
+    border: 1px solid var(--success);
+}
+
 /* ==================== FLASH MESSAGES ==================== */
 
 .flash-messages {

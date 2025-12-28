@@ -97,6 +97,13 @@
                 <button class="btn btn-primary btn-block" onclick="showShiftModal()">🕐 Manage Shifts (2 Weeks)</button>
                 <button class="btn btn-secondary btn-block" onclick="showSchedulesView()">📋 View All Schedules</button>
             </div>
+            
+            <hr class="divider">
+            
+            <div class="filter-section">
+                <h4>⚙️ Break Management</h4>
+                <button class="btn btn-primary btn-block" onclick="showManualBreakModal()">➕ Add Manual Break</button>
+            </div>
         </aside>
         
         <!-- Main: Break Records & Reports -->
@@ -367,6 +374,85 @@
         </div>
         <div class="modal-footer">
             <button class="btn" onclick="hideSchedulesView()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Break Entry Modal -->
+<div id="manualBreakModal" class="modal" style="display: none;">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h3>➕ Add Manual Break Record</h3>
+            <button class="modal-close" onclick="hideManualBreakModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>👤 Select Agent *</label>
+                <select id="manualBreakAgent" class="form-select" required>
+                    <option value="">-- Select Agent --</option>
+                    {% for agent in agents %}
+                    <option value="{{ agent.id }}">{{ agent.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>☕ Break Type *</label>
+                <select id="manualBreakType" class="form-select" required>
+                    <option value="">-- Select Break Type --</option>
+                    {% for key, info in break_types.items() %}
+                    <option value="{{ key }}">{{ info.emoji }} {{ info.name }} ({{ break_durations[key] }} min)</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label>📅 Start Date *</label>
+                    <input type="date" id="manualBreakStartDate" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label>🕐 Start Time *</label>
+                    <input type="time" id="manualBreakStartTime" class="form-input" required>
+                </div>
+            </div>
+            
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label>📅 End Date (Optional)</label>
+                    <input type="date" id="manualBreakEndDate" class="form-input">
+                    <small style="color: #666;">Leave empty for active break</small>
+                </div>
+                <div class="form-group">
+                    <label>🕐 End Time (Optional)</label>
+                    <input type="time" id="manualBreakEndTime" class="form-input">
+                </div>
+            </div>
+            
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label>📷 Start Screenshot (Optional)</label>
+                    <input type="file" id="manualBreakStartScreenshot" class="form-input" accept="image/*">
+                    <small style="color: #666;">Upload screenshot for break start</small>
+                </div>
+                <div class="form-group">
+                    <label>📷 End Screenshot (Optional)</label>
+                    <input type="file" id="manualBreakEndScreenshot" class="form-input" accept="image/*">
+                    <small style="color: #666;">Upload screenshot for break end</small>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>📝 Notes (Optional)</label>
+                <textarea id="manualBreakNotes" class="form-input" rows="3" placeholder="Add any notes about this break..."></textarea>
+            </div>
+            
+            <p id="manualBreakError" class="error-message"></p>
+            <p id="manualBreakSuccess" class="success-message" style="display: none;"></p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="hideManualBreakModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="submitManualBreak()">✅ Create Break Record</button>
         </div>
     </div>
 </div>

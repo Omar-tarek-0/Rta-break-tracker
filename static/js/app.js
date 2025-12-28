@@ -1014,3 +1014,116 @@ function exportToExcel() {
     window.location.href = `/api/report/export?start_date=${startDate}&end_date=${endDate}`;
 }
 
+// ==================== MANUAL BREAK ENTRY ====================
+
+// Show manual break modal
+function showManualBreakModal() {
+    const modal = document.getElementById('manualBreakModal');
+    modal.style.display = 'flex';
+    
+    // Set today's date as default
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('manualBreakStartDate').value = today;
+    document.getElementById('manualBreakEndDate').value = '';
+    
+    // Set current time as default
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    document.getElementById('manualBreakStartTime').value = `${hours}:${minutes}`;
+    document.getElementById('manualBreakEndTime').value = '';
+    
+    // Clear previous messages
+    document.getElementById('manualBreakError').textContent = '';
+    document.getElementById('manualBreakSuccess').style.display = 'none';
+}
+
+// Hide manual break modal
+function hideManualBreakModal() {
+    document.getElementById('manualBreakModal').style.display = 'none';
+    
+    // Reset form
+    document.getElementById('manualBreakAgent').value = '';
+    document.getElementById('manualBreakType').value = '';
+    document.getElementById('manualBreakStartDate').value = '';
+    document.getElementById('manualBreakStartTime').value = '';
+    document.getElementById('manualBreakEndDate').value = '';
+    document.getElementById('manualBreakEndTime').value = '';
+    document.getElementById('manualBreakStartScreenshot').value = '';
+    document.getElementById('manualBreakEndScreenshot').value = '';
+    document.getElementById('manualBreakNotes').value = '';
+    document.getElementById('manualBreakError').textContent = '';
+    document.getElementById('manualBreakSuccess').style.display = 'none';
+}
+
+// Submit manual break
+async function submitManualBreak() {
+    const errorMsg = document.getElementById('manualBreakError');
+    const successMsg = document.getElementById('manualBreakSuccess');
+    errorMsg.textContent = '';
+    successMsg.style.display = 'none';
+    
+    // Get form values
+    const agentId = document.getElementById('manualBreakAgent').value;
+    const breakType = document.getElementById('manualBreakType').value;
+    const startDate = document.getElementById('manualBreakStartDate').value;
+    const startTime = document.getElementById('manualBreakStartTime').value;
+    const endDate = document.getElementById('manualBreakEndDate').value;
+    const endTime = document.getElementById('manualBreakEndTime').value;
+    const notes = document.getElementById('manualBreakNotes').value;
+    const startScreenshot = document.getElementById('manualBreakStartScreenshot').files[0];
+    const endScreenshot = document.getElementById('manualBreakEndScreenshot').files[0];
+    
+    // Validation
+    if (!agentId) {
+        errorMsg.textContent = 'Please select an agent';
+        return;
+    }
+    if (!breakType) {
+        errorMsg.textContent = 'Please select a break type';
+        return;
+    }
+    if (!startDate || !startTime) {
+        errorMsg.textContent = 'Start date and time are required';
+        return;
+    }
+    
+    // Create form data
+    const formData = new FormData();
+    formData.append('agent_id', agentId);
+    formData.append('break_type', breakType);
+    formData.append('start_date', startDate);
+    formData.append('start_time', startTime);
+    if (endDate) formData.append('end_date', endDate);
+    if (endTime) formData.append('end_time', endTime);
+    if (notes) formData.append('notes', notes);
+    if (startScreenshot) formData.append('start_screenshot', startScreenshot);
+    if (endScreenshot) formData.append('end_screenshot', endScreenshot);
+    
+    try {
+        const response = await fetch('/api/break/manual', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            successMsg.textContent = data.message || 'Break record created successfully!';
+            successMsg.style.display = 'block';
+            
+            // Refresh breaks list
+            loadBreaks();
+            
+            // Close modal after 2 seconds
+            setTimeout(() => {
+                hideManualBreakModal();
+            }, 2000);
+        } else {
+            errorMsg.textContent = data.error || 'Failed to create break record';
+        }
+    } catch (err) {
+        errorMsg.textContent = 'Error: ' + err.message;
+    }
+}
+

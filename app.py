@@ -363,6 +363,7 @@ def dashboard():
         active_breaks=active_breaks,
         overdue_breaks=overdue_breaks,
         break_types=BREAK_INFO,
+        break_durations=BREAK_DURATIONS,
         date_filter=date_filter,
         agent_filter=agent_filter,
         type_filter=type_filter
@@ -516,6 +517,105 @@ def update_notes(break_id):
     db.session.commit()
     
     return jsonify({'success': True, 'notes': notes})
+
+
+@app.route('/api/break/manual', methods=['POST'])
+@login_required
+def create_manual_break():
+    """RTM can manually create break records for agents"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    # Get form data
+    agent_id = request.form.get('agent_id', type=int)
+    break_type = request.form.get('break_type')
+    start_date = request.form.get('start_date')
+    start_time = request.form.get('start_time')
+    end_date = request.form.get('end_date', '')
+    end_time = request.form.get('end_time', '')
+    notes = request.form.get('notes', '')
+    
+    # Files
+    start_screenshot = request.files.get('start_screenshot')
+    end_screenshot = request.files.get('end_screenshot')
+    
+    # Validation
+    if not agent_id:
+        return jsonify({'error': 'Agent ID is required'}), 400
+    if not break_type or break_type not in BREAK_DURATIONS:
+        return jsonify({'error': 'Invalid break type'}), 400
+    if not start_date or not start_time:
+        return jsonify({'error': 'Start date and time are required'}), 400
+    
+    # Check if agent exists
+    agent = User.query.get(agent_id)
+    if not agent or not agent.is_agent():
+        return jsonify({'error': 'Invalid agent'}), 400
+    
+    # Parse start datetime
+    try:
+        start_datetime_str = f"{start_date} {start_time}"
+        start_datetime = datetime.strptime(start_datetime_str, '%Y-%m-%d %H:%M')
+        # Localize to configured timezone
+        start_datetime = TIMEZONE.localize(start_datetime).replace(tzinfo=None)
+    except ValueError:
+        return jsonify({'error': 'Invalid start date/time format'}), 400
+    
+    # Parse end datetime (if provided)
+    end_datetime = None
+    if end_date and end_time:
+        try:
+            end_datetime_str = f"{end_date} {end_time}"
+            end_datetime = datetime.strptime(end_datetime_str, '%Y-%m-%d %H:%M')
+            end_datetime = TIMEZONE.localize(end_datetime).replace(tzinfo=None)
+            
+            if end_datetime < start_datetime:
+                return jsonify({'error': 'End time must be after start time'}), 400
+        except ValueError:
+            return jsonify({'error': 'Invalid end date/time format'}), 400
+    
+    # Save screenshots
+    start_screenshot_path = None
+    if start_screenshot:
+        start_screenshot_path = save_screenshot(start_screenshot)
+        if not start_screenshot_path:
+            return jsonify({'error': 'Invalid start screenshot file'}), 400
+    
+    end_screenshot_path = None
+    if end_screenshot:
+        end_screenshot_path = save_screenshot(end_screenshot)
+        if not end_screenshot_path:
+            return jsonify({'error': 'Invalid end screenshot file'}), 400
+    
+    # Calculate duration if end time is provided
+    duration_minutes = None
+    is_overdue = False
+    if end_datetime:
+        duration_minutes = int((end_datetime - start_datetime).total_seconds() / 60)
+        allowed_duration = BREAK_DURATIONS.get(break_type, 15)
+        is_overdue = duration_minutes > allowed_duration
+    
+    # Create break record
+    break_record = BreakRecord(
+        agent_id=agent_id,
+        break_type=break_type,
+        start_time=start_datetime,
+        start_screenshot=start_screenshot_path,
+        end_time=end_datetime,
+        end_screenshot=end_screenshot_path,
+        duration_minutes=duration_minutes,
+        is_overdue=is_overdue,
+        notes=notes
+    )
+    
+    db.session.add(break_record)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'Break record created successfully',
+        'break': break_record.to_dict()
+    })
 
 
 @app.route('/api/agents', methods=['GET'])
