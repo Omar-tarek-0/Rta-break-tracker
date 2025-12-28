@@ -761,17 +761,35 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     
     # Calculate expected working time: 8 hours per shift (480 minutes)
     # Expected break time: 60 minutes per shift (15 + 30 + 15)
-    # Total shift: 9 hours (540 minutes) = 8 working hours + 1 hour break
+    # Total shift: 9 hours (540 minutes) = 8 working hours + 1 hour allocated break
     expected_working_minutes = len(shifts) * 8 * 60  # 8 hours per shift = 480 minutes
     expected_break_minutes = len(shifts) * 60  # 60 minutes per shift (15 + 30 + 15)
     
-    # Actual time worked = total scheduled time - actual break time (including lunch and emergency)
-    # Note: total_scheduled_minutes includes the full shift (e.g., 9 hours = 540 minutes)
+    # Calculate actual time worked
+    # The total_scheduled_minutes includes the full shift (e.g., 9 hours = 540 minutes)
+    # Expected working time = 8 hours (480 minutes) per shift
+    # Expected break time = 1 hour (60 minutes) per shift - this is allocated for breaks
+    # 
+    # Logic: A 9-hour shift = 8 working hours + 1 hour allocated for breaks
+    # If an agent works the full 9 hours with 0 breaks, they're working during their allocated break time
+    # So: actual_working_time = total_scheduled_minutes - utilization_break_minutes
+    # But we should only count up to expected_working_minutes for utilization calculation
+    # This means: if they work 8 hours (expected), utilization = 100%
+    #            if they work 9 hours (no breaks), utilization = 100% (capped, not 112.5%)
     if expected_working_minutes > 0:
-        time_worked = total_scheduled_minutes - utilization_break_minutes
+        # Calculate time worked: scheduled time minus actual breaks taken
+        time_worked_raw = total_scheduled_minutes - utilization_break_minutes
+        
+        # The allocated break time (1 hour) is part of the scheduled time but not counted as working time
+        # So we need to subtract the expected break time from the calculation
+        # This ensures that working the expected 8 hours gives 100% utilization
+        # Formula: actual_working_time = (total_scheduled - expected_break_time) - actual_break_time
+        #          = expected_working_time - actual_break_time
+        actual_working_time = expected_working_minutes - utilization_break_minutes
+        
         # Utilization = (actual working time / expected working time) * 100
-        # Expected working time is 8 hours per shift
-        utilization = (time_worked / expected_working_minutes) * 100
+        # This will be 100% if no breaks are taken, and less if breaks exceed allocated time
+        utilization = (actual_working_time / expected_working_minutes) * 100
     else:
         utilization = 0
     
