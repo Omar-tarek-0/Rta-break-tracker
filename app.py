@@ -403,10 +403,11 @@ def get_breaks():
     agents_data = {}
     for br in breaks:
         if br.agent_id not in agents_data:
-            # Check if agent has an active break
-            active_break = BreakRecord.query.filter_by(
-                agent_id=br.agent_id,
-                end_time=None
+            # Check if agent has an active break (exclude punch_in/punch_out - these are attendance, not breaks)
+            active_break = BreakRecord.query.filter(
+                BreakRecord.agent_id == br.agent_id,
+                BreakRecord.end_time == None,
+                BreakRecord.break_type.notin_(['punch_in', 'punch_out'])
             ).first()
             
             agents_data[br.agent_id] = {
@@ -417,9 +418,12 @@ def get_breaks():
             }
         agents_data[br.agent_id]['breaks'].append(br.to_dict())
     
+    # Count only regular breaks (exclude punch_in/punch_out)
+    regular_breaks_count = len([b for b in breaks if b.break_type not in ['punch_in', 'punch_out']])
+    
     return jsonify({
         'agents': list(agents_data.values()),
-        'total_breaks': len(breaks)
+        'total_breaks': regular_breaks_count
     })
 
 

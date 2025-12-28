@@ -396,7 +396,15 @@ function createAgentCard(agent) {
     card.className = 'agent-card';
     card.dataset.agentName = agent.agent_name.toLowerCase();
     
-    // Determine status badge
+    // Separate breaks from punch records
+    const regularBreaks = agent.breaks.filter(br => 
+        br.break_type !== 'punch_in' && br.break_type !== 'punch_out'
+    );
+    const punchRecords = agent.breaks.filter(br => 
+        br.break_type === 'punch_in' || br.break_type === 'punch_out'
+    );
+    
+    // Determine status badge (only for actual breaks, not punch records)
     let statusBadge = '';
     if (agent.agent_status === 'on_break') {
         const breakType = agent.active_break_type || 'break';
@@ -414,26 +422,62 @@ function createAgentCard(agent) {
                 <span class="agent-name">👤 ${agent.agent_name}</span>
                 ${statusBadge}
             </div>
-            <span class="break-count">📋 ${agent.breaks.length} break(s)</span>
+            <span class="break-count">📋 ${regularBreaks.length} break(s)</span>
         </div>
+        ${punchRecords.length > 0 ? `
+        <div class="punch-records-section" style="padding: 10px 15px; background: #f0f7ff; border-bottom: 1px solid var(--border);">
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 5px;">📅 Attendance Records:</div>
+            ${punchRecords.map(br => createPunchRecordCard(br)).join('')}
+        </div>
+        ` : ''}
         <div class="agent-breaks">
-            ${agent.breaks.map(br => createBreakMiniCard(br)).join('')}
+            ${regularBreaks.map(br => createBreakMiniCard(br)).join('')}
         </div>
     `;
     
     return card;
 }
 
+function createPunchRecordCard(br) {
+    const startTime = new Date(br.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const endTime = br.end_time 
+        ? new Date(br.end_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        : '';
+    
+    // Punch in/out are instant (single screenshot), so show time differently
+    const timeDisplay = endTime ? `${startTime} → ${endTime}` : startTime;
+    
+    return `
+        <div class="punch-record-card" style="display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 12px;">
+            <span style="font-weight: 600;">${br.break_emoji} ${br.break_name}</span>
+            <span style="color: var(--text-secondary);">🕐 ${timeDisplay}</span>
+            ${br.start_screenshot 
+                ? `<img src="/uploads/${br.start_screenshot}" class="screenshot-thumb" style="width: 30px; height: 20px; object-fit: cover; border-radius: 3px; cursor: pointer; border: 1px solid var(--border);" onclick="showImage('/uploads/${br.start_screenshot}', '${br.break_name} Screenshot')">`
+                : ''
+            }
+            ${br.end_screenshot 
+                ? `<img src="/uploads/${br.end_screenshot}" class="screenshot-thumb" style="width: 30px; height: 20px; object-fit: cover; border-radius: 3px; cursor: pointer; border: 1px solid var(--border);" onclick="showImage('/uploads/${br.end_screenshot}', '${br.break_name} End Screenshot')">`
+                : ''
+            }
+        </div>
+    `;
+}
+
 function createBreakMiniCard(br) {
+    // Punch in/out are attendance records, not breaks - handle differently
+    if (br.break_type === 'punch_in' || br.break_type === 'punch_out') {
+        return createPunchRecordCard(br);
+    }
+    
     let statusClass = 'completed';
-    let statusText = `✅ ${br.duration_minutes}m`;
+    let statusText = `✅ ${br.duration_minutes || 0}m`;
     
     if (br.is_active) {
         statusClass = 'active';
-        statusText = `⏳ ${br.elapsed_minutes}m`;
+        statusText = `⏳ ${br.elapsed_minutes || 0}m`;
     } else if (br.is_overdue) {
         statusClass = 'overdue';
-        statusText = `⚠️ ${br.duration_minutes}m`;
+        statusText = `⚠️ ${br.duration_minutes || 0}m`;
     }
     
     const startTime = new Date(br.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -465,7 +509,7 @@ function createBreakMiniCard(br) {
                 </div>
             </div>
             <div class="break-notes">
-                <input type="text" placeholder="Notes..." value="${br.notes}" onchange="saveNotes(${br.id}, this.value)">
+                <input type="text" placeholder="Notes..." value="${br.notes || ''}" onchange="saveNotes(${br.id}, this.value)">
                 <button class="btn btn-sm btn-primary" onclick="saveNotes(${br.id}, this.previousElementSibling.value)">💾</button>
             </div>
         </div>
