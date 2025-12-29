@@ -55,7 +55,14 @@ BREAK_DURATIONS = {
     "lunch": 30,
     "meeting": 60,
     "huddle": 15,
-    "emergency": 15
+    "emergency": 15,
+    "coaching_aya": 30,
+    "coaching_mostafa": 30,
+    "punch_in": 0,
+    "punch_out": 0,
+    "overtime": 0,
+    "compensation": 0,
+    "meeting_team_leader": 60
 }
 
 # Break display info
@@ -64,7 +71,14 @@ BREAK_INFO = {
     "lunch": {"name": "Lunch Break", "emoji": "🍽️", "color": "#4caf50"},
     "meeting": {"name": "Meeting", "emoji": "📅", "color": "#9c27b0"},
     "huddle": {"name": "Huddle", "emoji": "👥", "color": "#ff9800"},
-    "emergency": {"name": "Emergency", "emoji": "🚨", "color": "#f44336"}
+    "emergency": {"name": "Emergency", "emoji": "🚨", "color": "#f44336"},
+    "coaching_aya": {"name": "Coaching (Aya)", "emoji": "📚", "color": "#9c27b0"},
+    "coaching_mostafa": {"name": "Coaching (Mostafa)", "emoji": "📚", "color": "#9c27b0"},
+    "punch_in": {"name": "Punch In", "emoji": "🟢", "color": "#4caf50"},
+    "punch_out": {"name": "Punch Out", "emoji": "🔴", "color": "#f44336"},
+    "overtime": {"name": "Overtime", "emoji": "⏰", "color": "#ff9800"},
+    "compensation": {"name": "Compensation", "emoji": "💰", "color": "#4caf50"},
+    "meeting_team_leader": {"name": "Meeting (Team Leader)", "emoji": "👔", "color": "#9c27b0"}
 }
 
 # User Roles
