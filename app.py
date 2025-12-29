@@ -508,6 +508,18 @@ def start_break():
             return jsonify({
                 'error': 'You have already punched out for the day. Breaks are no longer available.'
             }), 400
+        
+        # Check if already punched out
+        punch_out = BreakRecord.query.filter(
+            BreakRecord.agent_id == current_user.id,
+            BreakRecord.break_type == 'punch_out',
+            db.func.date(BreakRecord.start_time) == today
+        ).first()
+        
+        if punch_out:
+            return jsonify({
+                'error': 'You have already punched out for the day. Breaks are no longer available.'
+            }), 400
     
     if not screenshot:
         return jsonify({'error': 'Screenshot is required'}), 400
