@@ -5,6 +5,7 @@ Flask-based web app for tracking agent breaks
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, Response
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import not_
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -290,7 +291,7 @@ def agent_view():
     active_break = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
         BreakRecord.end_time == None,
-        ~BreakRecord.break_type.in_(['punch_in', 'punch_out'])
+        not_(BreakRecord.break_type.in_(['punch_in', 'punch_out']))
     ).first()
     
     # Get today's breaks
@@ -439,7 +440,7 @@ def start_break():
     active = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
         BreakRecord.end_time == None,
-        ~BreakRecord.break_type.in_(['punch_in', 'punch_out'])
+        not_(BreakRecord.break_type.in_(['punch_in', 'punch_out']))
     ).first()
     if active:
         return jsonify({'error': 'You already have an active break'}), 400
@@ -536,7 +537,7 @@ def end_break():
     active = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
         BreakRecord.end_time == None,
-        ~BreakRecord.break_type.in_(['punch_in', 'punch_out'])
+        not_(BreakRecord.break_type.in_(['punch_in', 'punch_out']))
     ).first()
     if not active:
         return jsonify({'error': 'No active break to end'}), 400
@@ -1225,6 +1226,13 @@ def export_report():
 def fix_existing_working_time_breaks():
     """One-time fix: Clear is_overdue flag for existing working time breaks"""
     try:
+        # Check if BreakRecord table exists
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        if 'break_record' not in [table.name for table in inspector.get_table_names()]:
+            print("⚠️ Database tables not initialized yet, skipping fix")
+            return 0
+        
         working_time_breaks = BreakRecord.query.filter(
             BreakRecord.break_type.in_(WORKING_TIME_BREAKS),
             BreakRecord.is_overdue == True
@@ -1238,6 +1246,8 @@ def fix_existing_working_time_breaks():
         return len(working_time_breaks)
     except Exception as e:
         print(f"⚠️ Error fixing working time breaks: {e}")
+        import traceback
+        traceback.print_exc()
         return 0
 
 def create_app():
