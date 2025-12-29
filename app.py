@@ -19,6 +19,9 @@ from config import (
     ROLE_AGENT, ROLE_RTM, DEFAULT_USERS, DEBUG, ENV, TIMEZONE
 )
 import pytz
+
+# Break types that count as working time (meetings/coaching)
+WORKING_TIME_BREAKS = ['coaching_aya', 'coaching_mostafa', 'meeting_team_leader']
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
@@ -137,6 +140,16 @@ class BreakRecord(db.Model):
     def get_allowed_duration(self):
         return BREAK_DURATIONS.get(self.break_type, 15)
     
+    def is_working_time_break(self):
+        """Check if this break counts as working time (coaching/meetings)"""
+        return self.break_type in WORKING_TIME_BREAKS
+    
+    def get_effective_overdue_status(self):
+        """Get overdue status, but always False for working time breaks"""
+        if self.is_working_time_break():
+            return False
+        return self.is_overdue
+    
     def get_local_start_time(self):
         """Get start time in local timezone"""
         if self.start_time:
@@ -168,7 +181,7 @@ class BreakRecord(db.Model):
             'duration_minutes': self.duration_minutes,
             'elapsed_minutes': self.get_elapsed_minutes() if self.is_active() else self.duration_minutes,
             'is_active': self.is_active(),
-            'is_overdue': self.is_overdue,
+            'is_overdue': self.get_effective_overdue_status(),  # Use effective status (excludes working time breaks)
             'notes': self.notes or '',
             'allowed_duration': self.get_allowed_duration()
         }
@@ -273,11 +286,11 @@ def agent_view():
     if current_user.is_rtm():
         return redirect(url_for('dashboard'))
     
-    # Get active break for this agent (exclude punch_in/punch_out - these are attendance, not breaks)
+    # Get active break for this agent (exclude punch_in/punch_out as they're auto-completed)
     active_break = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
         BreakRecord.end_time == None,
-        BreakRecord.break_type.notin_(['punch_in', 'punch_out'])
+        ~BreakRecord.break_type.in_(['punch_in', 'punch_out'])
     ).first()
     
     # Get today's breaks
@@ -364,7 +377,6 @@ def dashboard():
         active_breaks=active_breaks,
         overdue_breaks=overdue_breaks,
         break_types=BREAK_INFO,
-        break_durations=BREAK_DURATIONS,
         date_filter=date_filter,
         agent_filter=agent_filter,
         type_filter=type_filter
@@ -400,31 +412,19 @@ def get_breaks():
     
     breaks = query.order_by(BreakRecord.start_time.desc()).all()
     
-    # Group by agent and determine status
+    # Group by agent
     agents_data = {}
     for br in breaks:
         if br.agent_id not in agents_data:
-            # Check if agent has an active break (exclude punch_in/punch_out - these are attendance, not breaks)
-            active_break = BreakRecord.query.filter(
-                BreakRecord.agent_id == br.agent_id,
-                BreakRecord.end_time == None,
-                BreakRecord.break_type.notin_(['punch_in', 'punch_out'])
-            ).first()
-            
             agents_data[br.agent_id] = {
                 'agent_name': br.agent.full_name,
-                'agent_status': 'on_break' if active_break else 'available',
-                'active_break_type': active_break.break_type if active_break else None,
                 'breaks': []
             }
         agents_data[br.agent_id]['breaks'].append(br.to_dict())
     
-    # Count only regular breaks (exclude punch_in/punch_out)
-    regular_breaks_count = len([b for b in breaks if b.break_type not in ['punch_in', 'punch_out']])
-    
     return jsonify({
         'agents': list(agents_data.values()),
-        'total_breaks': regular_breaks_count
+        'total_breaks': len(breaks)
     })
 
 
@@ -435,78 +435,92 @@ def start_break():
     if current_user.is_rtm():
         return jsonify({'error': 'RTM cannot take breaks'}), 403
     
+    # Check for active break (exclude punch_in/punch_out as they're auto-completed instantly)
+    active = BreakRecord.query.filter(
+        BreakRecord.agent_id == current_user.id,
+        BreakRecord.end_time == None,
+        ~BreakRecord.break_type.in_(['punch_in', 'punch_out'])
+    ).first()
+    if active:
+        return jsonify({'error': 'You already have an active break'}), 400
+    
     break_type = request.form.get('break_type')
     screenshot = request.files.get('screenshot')
     
     if not break_type or break_type not in BREAK_DURATIONS:
         return jsonify({'error': 'Invalid break type'}), 400
     
+    # Require punch_in before other breaks (except punch_in itself)
+    if break_type != 'punch_in':
+        today = get_local_time().date()
+        punch_in = BreakRecord.query.filter(
+            BreakRecord.agent_id == current_user.id,
+            BreakRecord.break_type == 'punch_in',
+            db.func.date(BreakRecord.start_time) == today
+        ).first()
+        
+        if not punch_in:
+            return jsonify({
+                'error': 'You must punch in first before taking any breaks. Please punch in to continue.'
+            }), 400
+    
     if not screenshot:
         return jsonify({'error': 'Screenshot is required'}), 400
-    
-    # Punch in/out are instant (single screenshot) - auto-complete immediately
-    is_punch = break_type in ['punch_in', 'punch_out']
-    
-    # For regular breaks, check for active break
-    # For punch in/out, allow multiple records per day (but check if already punched in/out today)
-    if not is_punch:
-        active = BreakRecord.query.filter_by(agent_id=current_user.id, end_time=None).first()
-        if active:
-            return jsonify({'error': 'You already have an active break'}), 400
-    else:
-        # For punch_in, check if already punched in today
-        if break_type == 'punch_in':
-            today = get_local_time().date()
-            existing_punch = BreakRecord.query.filter(
-                BreakRecord.agent_id == current_user.id,
-                BreakRecord.break_type == 'punch_in',
-                db.func.date(BreakRecord.start_time) == today
-            ).first()
-            if existing_punch:
-                return jsonify({'error': 'You have already punched in today'}), 400
-        # For punch_out, check if already punched out today
-        elif break_type == 'punch_out':
-            today = get_local_time().date()
-            existing_punch = BreakRecord.query.filter(
-                BreakRecord.agent_id == current_user.id,
-                BreakRecord.break_type == 'punch_out',
-                db.func.date(BreakRecord.start_time) == today
-            ).first()
-            if existing_punch:
-                return jsonify({'error': 'You have already punched out today'}), 400
     
     # Save screenshot
     screenshot_path = save_screenshot(screenshot)
     if not screenshot_path:
         return jsonify({'error': 'Invalid screenshot file'}), 400
     
-    # Get current time
-    current_time = get_local_time().replace(tzinfo=None)
-    
     # Create break record
     break_record = BreakRecord(
         agent_id=current_user.id,
         break_type=break_type,
-        start_time=current_time,
+        start_time=get_local_time().replace(tzinfo=None),
         start_screenshot=screenshot_path
     )
     
-    # For punch in/out, auto-complete immediately (instant, single screenshot)
-    if is_punch:
-        break_record.end_time = current_time
-        break_record.end_screenshot = screenshot_path  # Use same screenshot
+    # Auto-complete punch_in and punch_out instantly
+    if break_type in ['punch_in', 'punch_out']:
+        break_record.end_time = break_record.start_time
+        break_record.end_screenshot = screenshot_path
         break_record.duration_minutes = 0
         break_record.is_overdue = False
-        message = f'{BREAK_INFO[break_type]["name"]} recorded successfully!'
-    else:
-        message = f'Break started! Return within {BREAK_DURATIONS[break_type]} minutes'
+        
+        # Prevent duplicate punch records for the same day
+        if break_type == 'punch_in':
+            today = get_local_time().date()
+            existing = BreakRecord.query.filter(
+                BreakRecord.agent_id == current_user.id,
+                BreakRecord.break_type == 'punch_in',
+                db.func.date(BreakRecord.start_time) == today
+            ).first()
+            if existing:
+                return jsonify({'error': 'You have already punched in today'}), 400
+        elif break_type == 'punch_out':
+            today = get_local_time().date()
+            existing = BreakRecord.query.filter(
+                BreakRecord.agent_id == current_user.id,
+                BreakRecord.break_type == 'punch_out',
+                db.func.date(BreakRecord.start_time) == today
+            ).first()
+            if existing:
+                return jsonify({'error': 'You have already punched out today'}), 400
     
     db.session.add(break_record)
     db.session.commit()
     
+    if break_type in ['punch_in', 'punch_out']:
+        action = "Punched in" if break_type == 'punch_in' else "Punched out"
+        return jsonify({
+            'success': True,
+            'message': f'{action} successfully! ✅',
+            'break': break_record.to_dict()
+        })
+    
     return jsonify({
         'success': True,
-        'message': message,
+        'message': f'Break started! Return within {BREAK_DURATIONS[break_type]} minutes',
         'break': break_record.to_dict()
     })
 
@@ -518,8 +532,12 @@ def end_break():
     if current_user.is_rtm():
         return jsonify({'error': 'RTM cannot take breaks'}), 403
     
-    # Get active break
-    active = BreakRecord.query.filter_by(agent_id=current_user.id, end_time=None).first()
+    # Get active break (exclude punch_in/punch_out as they're auto-completed instantly)
+    active = BreakRecord.query.filter(
+        BreakRecord.agent_id == current_user.id,
+        BreakRecord.end_time == None,
+        ~BreakRecord.break_type.in_(['punch_in', 'punch_out'])
+    ).first()
     if not active:
         return jsonify({'error': 'No active break to end'}), 400
     
@@ -536,7 +554,13 @@ def end_break():
     active.end_time = get_local_time().replace(tzinfo=None)
     active.end_screenshot = screenshot_path
     active.duration_minutes = int((active.end_time - active.start_time).total_seconds() / 60)
-    active.is_overdue = active.duration_minutes > active.get_allowed_duration()
+    
+    # Working time breaks (coaching/meetings) should never be marked as overdue
+    # They count as working time regardless of duration
+    if active.break_type in WORKING_TIME_BREAKS:
+        active.is_overdue = False
+    else:
+        active.is_overdue = active.duration_minutes > active.get_allowed_duration()
     
     db.session.commit()
     
@@ -564,102 +588,19 @@ def update_notes(break_id):
     return jsonify({'success': True, 'notes': notes})
 
 
-@app.route('/api/break/manual', methods=['POST'])
+@app.route('/api/fix/working-time-breaks', methods=['POST'])
 @login_required
-def create_manual_break():
-    """RTM can manually create break records for agents"""
+def fix_working_time_breaks_endpoint():
+    """Manual fix endpoint to clear is_overdue for working time breaks"""
     if not current_user.is_rtm():
         return jsonify({'error': 'Unauthorized'}), 403
     
-    # Get form data
-    agent_id = request.form.get('agent_id', type=int)
-    break_type = request.form.get('break_type')
-    start_date = request.form.get('start_date')
-    start_time = request.form.get('start_time')
-    end_date = request.form.get('end_date', '')
-    end_time = request.form.get('end_time', '')
-    notes = request.form.get('notes', '')
-    
-    # Files
-    start_screenshot = request.files.get('start_screenshot')
-    end_screenshot = request.files.get('end_screenshot')
-    
-    # Validation
-    if not agent_id:
-        return jsonify({'error': 'Agent ID is required'}), 400
-    if not break_type or break_type not in BREAK_DURATIONS:
-        return jsonify({'error': 'Invalid break type'}), 400
-    if not start_date or not start_time:
-        return jsonify({'error': 'Start date and time are required'}), 400
-    
-    # Check if agent exists
-    agent = User.query.get(agent_id)
-    if not agent or not agent.is_agent():
-        return jsonify({'error': 'Invalid agent'}), 400
-    
-    # Parse start datetime
-    try:
-        start_datetime_str = f"{start_date} {start_time}"
-        start_datetime = datetime.strptime(start_datetime_str, '%Y-%m-%d %H:%M')
-        # Localize to configured timezone
-        start_datetime = TIMEZONE.localize(start_datetime).replace(tzinfo=None)
-    except ValueError:
-        return jsonify({'error': 'Invalid start date/time format'}), 400
-    
-    # Parse end datetime (if provided)
-    end_datetime = None
-    if end_date and end_time:
-        try:
-            end_datetime_str = f"{end_date} {end_time}"
-            end_datetime = datetime.strptime(end_datetime_str, '%Y-%m-%d %H:%M')
-            end_datetime = TIMEZONE.localize(end_datetime).replace(tzinfo=None)
-            
-            if end_datetime < start_datetime:
-                return jsonify({'error': 'End time must be after start time'}), 400
-        except ValueError:
-            return jsonify({'error': 'Invalid end date/time format'}), 400
-    
-    # Save screenshots
-    start_screenshot_path = None
-    if start_screenshot:
-        start_screenshot_path = save_screenshot(start_screenshot)
-        if not start_screenshot_path:
-            return jsonify({'error': 'Invalid start screenshot file'}), 400
-    
-    end_screenshot_path = None
-    if end_screenshot:
-        end_screenshot_path = save_screenshot(end_screenshot)
-        if not end_screenshot_path:
-            return jsonify({'error': 'Invalid end screenshot file'}), 400
-    
-    # Calculate duration if end time is provided
-    duration_minutes = None
-    is_overdue = False
-    if end_datetime:
-        duration_minutes = int((end_datetime - start_datetime).total_seconds() / 60)
-        allowed_duration = BREAK_DURATIONS.get(break_type, 15)
-        is_overdue = duration_minutes > allowed_duration
-    
-    # Create break record
-    break_record = BreakRecord(
-        agent_id=agent_id,
-        break_type=break_type,
-        start_time=start_datetime,
-        start_screenshot=start_screenshot_path,
-        end_time=end_datetime,
-        end_screenshot=end_screenshot_path,
-        duration_minutes=duration_minutes,
-        is_overdue=is_overdue,
-        notes=notes
-    )
-    
-    db.session.add(break_record)
-    db.session.commit()
+    fixed_count = fix_existing_working_time_breaks()
     
     return jsonify({
         'success': True,
-        'message': f'Break record created successfully',
-        'break': break_record.to_dict()
+        'message': f'Fixed {fixed_count} working time breaks',
+        'fixed_count': fixed_count
     })
 
 
@@ -724,15 +665,9 @@ def get_shifts():
     if not current_user.is_rtm():
         return jsonify({'error': 'Unauthorized'}), 403
     
-    start_date_str = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
-    end_date_str = request.args.get('end_date', start_date_str)
+    start_date = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
+    end_date = request.args.get('end_date', start_date)
     agent_id = request.args.get('agent_id', '')
-    
-    try:
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-    except ValueError:
-        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
     
     query = Shift.query.filter(
         Shift.shift_date >= start_date,
@@ -863,15 +798,18 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     # Calculate metrics
     total_scheduled_minutes = sum(s.get_duration_hours() * 60 for s in shifts)
     
-    # Exclude punch_in and punch_out from break calculations
-    regular_breaks = [b for b in breaks if b.break_type not in ['punch_in', 'punch_out']]
+    # Separate breaks into working time breaks and regular breaks
+    working_time_breaks = [b for b in breaks if b.break_type in WORKING_TIME_BREAKS and b.end_time]
+    regular_breaks = [b for b in breaks if b.break_type not in WORKING_TIME_BREAKS + ['punch_in', 'punch_out'] and b.end_time]
     
-    total_break_minutes = sum(b.duration_minutes or 0 for b in regular_breaks if b.end_time)
-    total_allowed_break_minutes = sum(b.get_allowed_duration() for b in regular_breaks if b.end_time)
+    # Total break minutes (excluding working time breaks and punch records)
+    total_break_minutes = sum(b.duration_minutes or 0 for b in regular_breaks)
+    total_allowed_break_minutes = sum(b.get_allowed_duration() for b in regular_breaks)
     exceeding_break_minutes = max(0, total_break_minutes - total_allowed_break_minutes)
     
-    # Count incidents (overdue breaks) - exclude punch_in/punch_out
-    incidents = sum(1 for b in regular_breaks if b.is_overdue)
+    # Count incidents (overdue breaks) - only for regular breaks
+    # Use effective overdue status (working time breaks are never overdue)
+    incidents = sum(1 for b in regular_breaks if b.get_effective_overdue_status())
     
     # Count emergency breaks
     emergency_count = sum(1 for b in breaks if b.break_type == 'emergency')
@@ -881,76 +819,40 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     for b in breaks:
         break_counts[b.break_type] = break_counts.get(b.break_type, 0) + 1
     
-    # Extract specific counts for reporting
-    lunch_count = break_counts.get('lunch', 0)
-    coaching_count = break_counts.get('coaching_aya', 0) + break_counts.get('coaching_mostafa', 0)
-    overtime_count = break_counts.get('overtime', 0)
-    compensation_count = break_counts.get('compensation', 0)
-    
-    # ==================== UTILIZATION CALCULATION ====================
-    # Utilization: Working hours = 8 hours, Break = 1 hour allocated
-    # If agent worked 8 hours and took 1 hour break = 100% utilization
-    # If agent took emergency (or any break) that exceeds the 1 hour allocated break, 
-    # that reduces the utilization because working time decreases
-    
-    # Calculate all break time (excluding overtime and compensation - these are work, not breaks)
-    # Include: short, lunch, emergency, meeting, huddle, coaching, etc.
-    utilization_break_minutes = 0
-    for b in regular_breaks:
-        if b.end_time and b.break_type not in ['overtime', 'compensation']:
-            utilization_break_minutes += b.duration_minutes or 0
-    
-    # Expected working time: 8 hours per shift (480 minutes)
-    # Expected break time: 1 hour per shift (60 minutes) - allocated for breaks
-    expected_working_minutes = len(shifts) * 8 * 60  # 8 hours per shift = 480 minutes
-    expected_break_minutes = len(shifts) * 60  # 60 minutes per shift (allocated break time)
-    
-    # Calculate actual working time
-    # Formula: actual_working_time = expected_working_time - (actual_break_time - expected_break_time)
-    #         = expected_working_time - excess_break_time
-    # If breaks <= 1 hour: actual_working_time = 8 hours (100% utilization)
-    # If breaks > 1 hour: actual_working_time = 8 hours - (excess break time) (< 100% utilization)
-    if expected_working_minutes > 0:
-        # Calculate excess break time (breaks beyond the allocated 1 hour)
-        excess_break_minutes = max(0, utilization_break_minutes - expected_break_minutes)
-        
-        # Actual working time = expected working time - excess break time
-        actual_working_time = expected_working_minutes - excess_break_minutes
-        
-        # Utilization = (actual working time / expected working time) * 100
-        utilization = (actual_working_time / expected_working_minutes) * 100
+    # Calculate utilization
+    # Working time breaks (coaching/meetings) count as working time, not breaks
+    # Time worked = scheduled time - regular break time taken
+    if total_scheduled_minutes > 0:
+        time_worked = total_scheduled_minutes - total_break_minutes
+        utilization = (time_worked / total_scheduled_minutes) * 100
+        utilization = min(100.0, utilization)  # Cap at 100%
     else:
         utilization = 0
     
-    # ==================== ADHERENCE CALCULATION ====================
-    # Adherence: Based on break durations and shift timing
-    # 1. Break duration adherence: If agent took break 1 for 16 mins (allowed 15 mins), adherence is reduced
-    # 2. Shift timing adherence: If agent came/punched in on assigned shift time, they're adhering
+    # Calculate adherence based on:
+    # 1. Break durations (actual vs allowed)
+    # 2. Punch in time vs shift start time
+    # 3. Punch out time vs shift end time
     
     adherence_scores = []
     
-    # 1. Break duration adherence
-    # For each break, check if actual duration <= allowed duration
-    # If exceeded, calculate penalty: (allowed_duration / actual_duration) * 100
-    total_completed_breaks = len([b for b in breaks if b.end_time and b.break_type not in ['punch_in', 'punch_out', 'overtime', 'compensation']])
+    # 1. Break duration adherence (only for regular breaks)
+    total_completed_breaks = len([b for b in regular_breaks if b.end_time])
     
     if total_completed_breaks > 0:
-        for b in breaks:
-            if b.end_time and b.duration_minutes is not None and b.break_type not in ['punch_in', 'punch_out', 'overtime', 'compensation']:
+        for b in regular_breaks:
+            if b.end_time and b.duration_minutes is not None:
                 allowed_duration = b.get_allowed_duration()
                 if allowed_duration > 0:
                     actual_duration = b.duration_minutes
                     if actual_duration <= allowed_duration:
-                        # Within allowed time = 100% adherence
                         break_adherence = 100.0
                     else:
-                        # Exceeded allowed time = penalty
-                        # Example: 15 mins allowed, 16 mins taken = (15/16) * 100 = 93.75%
                         break_adherence = (allowed_duration / actual_duration) * 100
                     adherence_scores.append(break_adherence)
     
-    # 2. Shift timing adherence (punch in/out vs assigned shift times)
-    # If agent came/punched in on assigned shift time, they're adhering
+    # 2. Punch in/out adherence based on shift times
+    # Group shifts by date for easier lookup
     shifts_by_date = {s.shift_date: s for s in shifts}
     
     # Group punch in/out by date
@@ -966,7 +868,7 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     for shift_date, shift in shifts_by_date.items():
         punch_records = punch_records_by_date.get(shift_date, {})
         
-        # Punch in adherence: Did agent punch in on assigned shift time?
+        # Punch in adherence
         if 'punch_in' in punch_records:
             punch_in = punch_records['punch_in']
             punch_in_time = punch_in.start_time.time()
@@ -984,13 +886,14 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
             else:
                 # Penalty: decrease adherence for being late/early
                 # Max penalty at 30 minutes = 0% adherence
+                # Formula: max(0, (30 - time_diff) / 30 * 100)
                 punch_in_adherence = max(0, (30 - time_diff_minutes) / 30 * 100)
             adherence_scores.append(punch_in_adherence)
         else:
             # No punch in = 0% adherence for that day
             adherence_scores.append(0.0)
         
-        # Punch out adherence: Did agent punch out on assigned shift time?
+        # Punch out adherence
         if 'punch_out' in punch_records:
             punch_out = punch_records['punch_out']
             punch_out_time = punch_out.start_time.time()
@@ -1011,6 +914,7 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
                 punch_out_adherence = 100.0
             else:
                 # Penalty: decrease adherence for being late/early
+                # Max penalty at 30 minutes = 0% adherence
                 punch_out_adherence = max(0, (30 - time_diff_minutes) / 30 * 100)
             adherence_scores.append(punch_out_adherence)
         else:
@@ -1023,41 +927,10 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     else:
         adherence = 100  # No data = 100% adherence (default)
     
-    # ==================== CONFORMANCE CALCULATION ====================
-    # Conformance: Agent should work 8 hours per day
-    # If they worked exactly 8 hours = 100% conformance
-    # If they worked 7.59 hours = reduced conformance
-    # If they worked more than 8 hours but didn't come on shift, but used compensation aux 
-    # to make up missing minutes to reach 8 hours, it should count for conformance
-    # Formula: Conformance = (actual working hours / 8 hours) × 100
-    # Compensation aux counts toward the 8 hours
-    
+    # Conformance (similar to adherence but measures schedule following)
+    # For simplicity: conformance = did agent have shifts and follow them
     if len(shifts) > 0:
-        # Calculate actual working hours
-        # Working time = shift duration - break time + compensation time
-        # Compensation aux counts as working time (to compensate for missing minutes)
-        
-        # Get compensation time (compensation aux counts toward working hours)
-        compensation_minutes = sum(
-            b.duration_minutes or 0 
-            for b in breaks 
-            if b.break_type == 'compensation' and b.end_time
-        )
-        
-        # Calculate actual working time
-        # Formula: actual_working_hours = (shift_duration - break_time) + compensation_time
-        # But we need to account for the fact that shift duration includes allocated break time
-        # So: actual_working_hours = expected_working_hours - excess_break_time + compensation_time
-        
-        # Calculate excess break time (breaks beyond allocated 1 hour)
-        excess_break_minutes = max(0, utilization_break_minutes - expected_break_minutes)
-        
-        # Actual working hours = expected working hours - excess breaks + compensation
-        actual_working_minutes = expected_working_minutes - excess_break_minutes + compensation_minutes
-        
-        # Conformance = (actual working hours / 8 hours) × 100
-        # Cap at 100% (can't exceed 100% conformance)
-        conformance = min(100.0, (actual_working_minutes / expected_working_minutes) * 100)
+        conformance = adherence  # Using same logic for now
     else:
         conformance = 0  # No shifts assigned = 0% conformance
     
@@ -1068,16 +941,12 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         'exceeding_break_minutes': exceeding_break_minutes,
         'incidents': incidents,
         'emergency_count': emergency_count,
-        'total_breaks': len(regular_breaks),  # Exclude punch_in/punch_out from total
+        'total_breaks': len(breaks),
         'completed_breaks': total_completed_breaks,
         'utilization': round(utilization, 1),
         'adherence': round(adherence, 1),
         'conformance': round(conformance, 1),
         'break_counts': break_counts,
-        'lunch_count': lunch_count,
-        'coaching_count': coaching_count,
-        'overtime_count': overtime_count,
-        'compensation_count': compensation_count,
         'shifts_count': len(shifts)
     }
 
@@ -1353,22 +1222,34 @@ def export_report():
 
 # ==================== STARTUP ====================
 
+def fix_existing_working_time_breaks():
+    """One-time fix: Clear is_overdue flag for existing working time breaks"""
+    try:
+        working_time_breaks = BreakRecord.query.filter(
+            BreakRecord.break_type.in_(WORKING_TIME_BREAKS),
+            BreakRecord.is_overdue == True
+        ).all()
+        
+        if working_time_breaks:
+            for br in working_time_breaks:
+                br.is_overdue = False
+            db.session.commit()
+            print(f"✅ Fixed {len(working_time_breaks)} working time breaks that were incorrectly marked as overdue")
+        return len(working_time_breaks)
+    except Exception as e:
+        print(f"⚠️ Error fixing working time breaks: {e}")
+        return 0
+
 def create_app():
     """Initialize database - called on startup"""
-    try:
-        with app.app_context():
-            init_db()
-    except Exception as e:
-        print(f"⚠️ Warning: Database initialization failed: {e}")
-        print("⚠️ App will continue, but database features may not work.")
+    with app.app_context():
+        init_db()
+        # Fix any existing working time breaks that were incorrectly marked as overdue
+        fix_existing_working_time_breaks()
     return app
 
 # Initialize on import (for gunicorn)
-try:
-    create_app()
-except Exception as e:
-    print(f"⚠️ Warning: App initialization error: {e}")
-    print("⚠️ App will continue, but some features may not work.")
+create_app()
 
 # ==================== MAIN ====================
 
