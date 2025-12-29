@@ -119,8 +119,33 @@
     window.agentData = {
         hasActiveBreak: {% if active_break %}true{% else %}false{% endif %},
         activeBreakId: {% if active_break %}{{ active_break.id }}{% else %}null{% endif %},
-        activeBreakStart: {% if active_break %}"{{ active_break.start_time.isoformat() }}"{% else %}null{% endif %}
+        activeBreakStart: {% if active_break %}"{{ active_break.start_time.isoformat() }}"{% else %}null{% endif %},
+        punchStatus: '{{ punch_status }}',
+        breakInfo: {{ break_types|tojson }},
+        breakDurations: {{ break_durations|tojson }}
     };
+    
+    // Disable break buttons if punched out
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.agentData.punchStatus === 'punched_out') {
+            document.querySelectorAll('.break-type-btn').forEach(btn => {
+                if (btn.dataset.type !== 'punch_in' && btn.dataset.type !== 'punch_out') {
+                    btn.disabled = true;
+                    btn.classList.add('disabled');
+                    btn.title = 'You have already punched out for the day';
+                }
+            });
+        } else if (window.agentData.punchStatus === 'not_punched_in') {
+            // Disable all breaks except punch_in
+            document.querySelectorAll('.break-type-btn').forEach(btn => {
+                if (btn.dataset.type !== 'punch_in') {
+                    btn.disabled = true;
+                    btn.classList.add('disabled');
+                    btn.title = 'You must punch in first';
+                }
+            });
+        }
+    });
 </script>
 {% endblock %}
 

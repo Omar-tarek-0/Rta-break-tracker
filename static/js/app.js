@@ -396,88 +396,56 @@ function createAgentCard(agent) {
     card.className = 'agent-card';
     card.dataset.agentName = agent.agent_name.toLowerCase();
     
-    // Separate breaks from punch records
-    const regularBreaks = agent.breaks.filter(br => 
-        br.break_type !== 'punch_in' && br.break_type !== 'punch_out'
-    );
-    const punchRecords = agent.breaks.filter(br => 
-        br.break_type === 'punch_in' || br.break_type === 'punch_out'
-    );
-    
-    // Determine status badge (only for actual breaks, not punch records)
-    let statusBadge = '';
-    if (agent.agent_status === 'on_break') {
-        const breakType = agent.active_break_type || 'break';
-        const breakEmoji = breakType === 'lunch' ? '🍽️' : 
-                          breakType === 'emergency' ? '🚨' : 
-                          breakType === 'short' ? '☕' : '⏳';
-        statusBadge = `<span class="agent-status-badge status-on-break">${breakEmoji} On Break</span>`;
-    } else {
-        statusBadge = `<span class="agent-status-badge status-available">🟢 Available</span>`;
+    // Show attendance records separately if they exist
+    let attendanceSection = '';
+    if (agent.attendance && agent.attendance.length > 0) {
+        attendanceSection = `
+            <div class="attendance-section" style="padding: 15px; border-bottom: 1px solid var(--border);">
+                <h4 style="font-size: 13px; margin-bottom: 10px; color: var(--text-secondary);">📅 Attendance Records:</h4>
+                ${agent.attendance.map(att => createAttendanceCard(att)).join('')}
+            </div>
+        `;
     }
     
     card.innerHTML = `
         <div class="agent-card-header">
-            <div class="agent-header-left">
-                <span class="agent-name">👤 ${agent.agent_name}</span>
-                ${statusBadge}
-            </div>
-            <span class="break-count">📋 ${regularBreaks.length} break(s)</span>
+            <span class="agent-name">👤 ${agent.agent_name}</span>
+            <span class="break-count">📋 ${agent.breaks.length} break(s)</span>
         </div>
-        ${punchRecords.length > 0 ? `
-        <div class="punch-records-section" style="padding: 10px 15px; background: #f0f7ff; border-bottom: 1px solid var(--border);">
-            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 5px;">📅 Attendance Records:</div>
-            ${punchRecords.map(br => createPunchRecordCard(br)).join('')}
-        </div>
-        ` : ''}
+        ${attendanceSection}
         <div class="agent-breaks">
-            ${regularBreaks.map(br => createBreakMiniCard(br)).join('')}
+            ${agent.breaks.map(br => createBreakMiniCard(br)).join('')}
         </div>
     `;
     
     return card;
 }
 
-function createPunchRecordCard(br) {
-    const startTime = new Date(br.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    const endTime = br.end_time 
-        ? new Date(br.end_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-        : '';
-    
-    // Punch in/out are instant (single screenshot), so show time differently
-    const timeDisplay = endTime ? `${startTime} → ${endTime}` : startTime;
-    
+function createAttendanceCard(att) {
+    const time = new Date(att.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     return `
-        <div class="punch-record-card" style="display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 12px;">
-            <span style="font-weight: 600;">${br.break_emoji} ${br.break_name}</span>
-            <span style="color: var(--text-secondary);">🕐 ${timeDisplay}</span>
-            ${br.start_screenshot 
-                ? `<img src="/uploads/${br.start_screenshot}" class="screenshot-thumb" style="width: 30px; height: 20px; object-fit: cover; border-radius: 3px; cursor: pointer; border: 1px solid var(--border);" onclick="showImage('/uploads/${br.start_screenshot}', '${br.break_name} Screenshot')">`
-                : ''
-            }
-            ${br.end_screenshot 
-                ? `<img src="/uploads/${br.end_screenshot}" class="screenshot-thumb" style="width: 30px; height: 20px; object-fit: cover; border-radius: 3px; cursor: pointer; border: 1px solid var(--border);" onclick="showImage('/uploads/${br.end_screenshot}', '${br.break_name} End Screenshot')">`
-                : ''
+        <div class="attendance-card" style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding: 8px; background: var(--surface-light); border-radius: 6px;">
+            <span style="font-size: 16px;">${att.emoji}</span>
+            <span style="font-weight: 600; flex: 1;">${att.name}</span>
+            <span style="font-size: 12px; color: var(--text-secondary);">🕐 ${time}</span>
+            ${att.screenshot 
+                ? `<img src="/uploads/${att.screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${att.screenshot}', '${att.name} Screenshot')" style="width: 40px; height: 30px; object-fit: cover; border-radius: 4px; cursor: pointer;">`
+                : '<div style="width: 40px; height: 30px; background: var(--border); border-radius: 4px;"></div>'
             }
         </div>
     `;
 }
 
 function createBreakMiniCard(br) {
-    // Punch in/out are attendance records, not breaks - handle differently
-    if (br.break_type === 'punch_in' || br.break_type === 'punch_out') {
-        return createPunchRecordCard(br);
-    }
-    
     let statusClass = 'completed';
-    let statusText = `✅ ${br.duration_minutes || 0}m`;
+    let statusText = `✅ ${br.duration_minutes}m`;
     
     if (br.is_active) {
         statusClass = 'active';
-        statusText = `⏳ ${br.elapsed_minutes || 0}m`;
+        statusText = `⏳ ${br.elapsed_minutes}m`;
     } else if (br.is_overdue) {
         statusClass = 'overdue';
-        statusText = `⚠️ ${br.duration_minutes || 0}m`;
+        statusText = `⚠️ ${br.duration_minutes}m`;
     }
     
     const startTime = new Date(br.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -509,7 +477,7 @@ function createBreakMiniCard(br) {
                 </div>
             </div>
             <div class="break-notes">
-                <input type="text" placeholder="Notes..." value="${br.notes || ''}" onchange="saveNotes(${br.id}, this.value)">
+                <input type="text" placeholder="Notes..." value="${br.notes}" onchange="saveNotes(${br.id}, this.value)">
                 <button class="btn btn-sm btn-primary" onclick="saveNotes(${br.id}, this.previousElementSibling.value)">💾</button>
             </div>
         </div>
@@ -632,25 +600,10 @@ function setShiftTemplate(start, end) {
 
 function selectAllAgents() {
     document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = true);
-    if (document.getElementById('selectAllAgents')) {
-        document.getElementById('selectAllAgents').checked = true;
-    }
 }
 
 function deselectAllAgents() {
     document.querySelectorAll('.agent-checkbox').forEach(cb => cb.checked = false);
-    if (document.getElementById('selectAllAgents')) {
-        document.getElementById('selectAllAgents').checked = false;
-    }
-}
-
-function toggleAllAgents() {
-    const selectAll = document.getElementById('selectAllAgents');
-    if (selectAll && selectAll.checked) {
-        selectAllAgents();
-    } else {
-        deselectAllAgents();
-    }
 }
 
 async function saveBulkShifts() {
@@ -724,176 +677,12 @@ async function saveBulkShifts() {
     }
 }
 
-// ==================== SCHEDULES VIEW ====================
-
-function showSchedulesView() {
-    document.getElementById('schedulesModal').style.display = 'flex';
-    // Set default dates (today to 2 weeks from today)
-    const today = new Date();
-    const twoWeeksLater = new Date(today);
-    twoWeeksLater.setDate(twoWeeksLater.getDate() + 13); // 14 days total
-    
-    document.getElementById('scheduleViewStartDate').value = formatDate(today);
-    document.getElementById('scheduleViewEndDate').value = formatDate(twoWeeksLater);
-    
-    // Auto-load schedules
-    loadSchedules();
-}
-
-function hideSchedulesView() {
-    document.getElementById('schedulesModal').style.display = 'none';
-}
-
-function setScheduleViewRange(period) {
-    const today = new Date();
-    let startDate, endDate;
-    
-    if (period === 'today') {
-        startDate = endDate = today;
-    } else if (period === 'week') {
-        startDate = new Date(today);
-        startDate.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
-        endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 6); // End of week
-    } else if (period === 'month') {
-        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    }
-    
-    document.getElementById('scheduleViewStartDate').value = formatDate(startDate);
-    document.getElementById('scheduleViewEndDate').value = formatDate(endDate);
-    loadSchedules();
-}
-
-async function loadSchedules() {
-    const startDate = document.getElementById('scheduleViewStartDate').value;
-    const endDate = document.getElementById('scheduleViewEndDate').value;
-    
-    if (!startDate || !endDate) {
-        document.getElementById('schedulesError').textContent = '⚠️ Please select a date range';
-        document.getElementById('schedulesError').style.display = 'block';
-        return;
-    }
-    
-    const tbody = document.getElementById('schedulesTableBody');
-    const loading = document.getElementById('schedulesLoading');
-    const error = document.getElementById('schedulesError');
-    const summary = document.getElementById('schedulesSummary');
-    
-    tbody.innerHTML = '';
-    loading.style.display = 'block';
-    error.style.display = 'none';
-    summary.style.display = 'none';
-    
-    try {
-        const response = await fetch(`/api/shifts?start_date=${startDate}&end_date=${endDate}`);
-        const data = await response.json();
-        
-        if (data.error) {
-            error.textContent = '⚠️ ' + data.error;
-            error.style.display = 'block';
-            loading.style.display = 'none';
-            return;
-        }
-        
-        loading.style.display = 'none';
-        
-        if (data.shifts && data.shifts.length > 0) {
-            // Group shifts by agent
-            const shiftsByAgent = {};
-            data.shifts.forEach(shift => {
-                if (!shiftsByAgent[shift.agent_name]) {
-                    shiftsByAgent[shift.agent_name] = [];
-                }
-                shiftsByAgent[shift.agent_name].push(shift);
-            });
-            
-            // Sort agents by name
-            const agentNames = Object.keys(shiftsByAgent).sort();
-            
-            tbody.innerHTML = '';
-            agentNames.forEach(agentName => {
-                const agentShifts = shiftsByAgent[agentName].sort((a, b) => {
-                    return new Date(a.shift_date) - new Date(b.shift_date);
-                });
-                
-                agentShifts.forEach((shift, index) => {
-                    const row = document.createElement('tr');
-                    const shiftDate = new Date(shift.shift_date);
-                    const formattedDate = shiftDate.toLocaleDateString('en-US', { 
-                        weekday: 'short', 
-                        year: 'numeric', 
-                        month: 'short', 
-                        day: 'numeric' 
-                    });
-                    
-                    row.innerHTML = `
-                        <td>${index === 0 ? `<strong>${shift.agent_name}</strong>` : ''}</td>
-                        <td>${formattedDate}</td>
-                        <td>${formatTime(shift.start_time)}</td>
-                        <td>${formatTime(shift.end_time)}</td>
-                        <td>${shift.duration_hours.toFixed(1)}h</td>
-                        <td>
-                            <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${shift.id})" title="Delete shift">
-                                🗑️
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            });
-            
-            document.getElementById('schedulesCount').textContent = data.total;
-            summary.style.display = 'block';
-        } else {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-message">No schedules found for the selected date range</td></tr>';
-        }
-    } catch (err) {
-        error.textContent = '⚠️ Error loading schedules: ' + err.message;
-        error.style.display = 'block';
-        loading.style.display = 'none';
-    }
-}
-
-function formatTime(timeStr) {
-    // Convert "HH:MM" to "HH:MM AM/PM"
-    const [hours, minutes] = timeStr.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
-    return `${hour12}:${minutes} ${ampm}`;
-}
-
-async function deleteSchedule(shiftId) {
-    if (!confirm('Are you sure you want to delete this shift?')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/shift/${shiftId}`, {
-            method: 'DELETE'
-        });
-        
-        const data = await response.json();
-        
-        if (data.error) {
-            alert('Error: ' + data.error);
-        } else {
-            // Reload schedules
-            loadSchedules();
-        }
-    } catch (err) {
-        alert('Error deleting shift: ' + err.message);
-    }
-}
-
 // Close modals on escape
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         hideAddAgentModal();
         hideImageModal();
         hideShiftModal();
-        hideSchedulesView();
     }
 });
 
@@ -977,14 +766,14 @@ async function loadMetrics() {
     }
     
     const tbody = document.getElementById('metricsTableBody');
-        tbody.innerHTML = '<tr><td colspan="15" class="loading">Loading metrics...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" class="loading">Loading metrics...</td></tr>';
     
     try {
         const response = await fetch(`/api/report/metrics?start_date=${startDate}&end_date=${endDate}`);
         const data = await response.json();
         
         if (data.error) {
-            tbody.innerHTML = `<tr><td colspan="15" class="error-message">${data.error}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="13" class="error-message">${data.error}</td></tr>`;
             return;
         }
         
@@ -999,7 +788,7 @@ async function loadMetrics() {
         
         // Populate table
         if (data.agents.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="15" class="empty-message">No agents found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13" class="empty-message">No agents found</td></tr>';
             return;
         }
         
@@ -1030,8 +819,6 @@ async function loadMetrics() {
                 <td>${agent.emergency_count}</td>
                 <td>${agent.lunch_count || 0}</td>
                 <td>${agent.coaching_count || 0}</td>
-                <td>${agent.overtime_count || 0}</td>
-                <td>${agent.compensation_count || 0}</td>
                 <td>${agent.utilization}%</td>
                 <td>${agent.adherence}%</td>
                 <td>${agent.conformance}%</td>
@@ -1041,7 +828,7 @@ async function loadMetrics() {
         });
         
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="15" class="error-message">Error: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="13" class="error-message">Error: ${err.message}</td></tr>`;
     }
 }
 
@@ -1056,118 +843,5 @@ function exportToExcel() {
     
     // Trigger download
     window.location.href = `/api/report/export?start_date=${startDate}&end_date=${endDate}`;
-}
-
-// ==================== MANUAL BREAK ENTRY ====================
-
-// Show manual break modal
-function showManualBreakModal() {
-    const modal = document.getElementById('manualBreakModal');
-    modal.style.display = 'flex';
-    
-    // Set today's date as default
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('manualBreakStartDate').value = today;
-    document.getElementById('manualBreakEndDate').value = '';
-    
-    // Set current time as default
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    document.getElementById('manualBreakStartTime').value = `${hours}:${minutes}`;
-    document.getElementById('manualBreakEndTime').value = '';
-    
-    // Clear previous messages
-    document.getElementById('manualBreakError').textContent = '';
-    document.getElementById('manualBreakSuccess').style.display = 'none';
-}
-
-// Hide manual break modal
-function hideManualBreakModal() {
-    document.getElementById('manualBreakModal').style.display = 'none';
-    
-    // Reset form
-    document.getElementById('manualBreakAgent').value = '';
-    document.getElementById('manualBreakType').value = '';
-    document.getElementById('manualBreakStartDate').value = '';
-    document.getElementById('manualBreakStartTime').value = '';
-    document.getElementById('manualBreakEndDate').value = '';
-    document.getElementById('manualBreakEndTime').value = '';
-    document.getElementById('manualBreakStartScreenshot').value = '';
-    document.getElementById('manualBreakEndScreenshot').value = '';
-    document.getElementById('manualBreakNotes').value = '';
-    document.getElementById('manualBreakError').textContent = '';
-    document.getElementById('manualBreakSuccess').style.display = 'none';
-}
-
-// Submit manual break
-async function submitManualBreak() {
-    const errorMsg = document.getElementById('manualBreakError');
-    const successMsg = document.getElementById('manualBreakSuccess');
-    errorMsg.textContent = '';
-    successMsg.style.display = 'none';
-    
-    // Get form values
-    const agentId = document.getElementById('manualBreakAgent').value;
-    const breakType = document.getElementById('manualBreakType').value;
-    const startDate = document.getElementById('manualBreakStartDate').value;
-    const startTime = document.getElementById('manualBreakStartTime').value;
-    const endDate = document.getElementById('manualBreakEndDate').value;
-    const endTime = document.getElementById('manualBreakEndTime').value;
-    const notes = document.getElementById('manualBreakNotes').value;
-    const startScreenshot = document.getElementById('manualBreakStartScreenshot').files[0];
-    const endScreenshot = document.getElementById('manualBreakEndScreenshot').files[0];
-    
-    // Validation
-    if (!agentId) {
-        errorMsg.textContent = 'Please select an agent';
-        return;
-    }
-    if (!breakType) {
-        errorMsg.textContent = 'Please select a break type';
-        return;
-    }
-    if (!startDate || !startTime) {
-        errorMsg.textContent = 'Start date and time are required';
-        return;
-    }
-    
-    // Create form data
-    const formData = new FormData();
-    formData.append('agent_id', agentId);
-    formData.append('break_type', breakType);
-    formData.append('start_date', startDate);
-    formData.append('start_time', startTime);
-    if (endDate) formData.append('end_date', endDate);
-    if (endTime) formData.append('end_time', endTime);
-    if (notes) formData.append('notes', notes);
-    if (startScreenshot) formData.append('start_screenshot', startScreenshot);
-    if (endScreenshot) formData.append('end_screenshot', endScreenshot);
-    
-    try {
-        const response = await fetch('/api/break/manual', {
-            method: 'POST',
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok && data.success) {
-            successMsg.textContent = data.message || 'Break record created successfully!';
-            successMsg.style.display = 'block';
-            
-            // Refresh breaks list
-            loadBreaks();
-            
-            // Close modal after 2 seconds
-            setTimeout(() => {
-                hideManualBreakModal();
-            }, 2000);
-        } else {
-            errorMsg.textContent = data.error || 'Failed to create break record';
-        }
-    } catch (err) {
-        errorMsg.textContent = 'Error: ' + err.message;
-    }
 }
 

@@ -359,15 +359,21 @@ def dashboard():
     # Get all agents
     agents = User.query.filter_by(role=ROLE_AGENT).order_by(User.full_name).all()
     
-    # Get stats
+    # Get stats (exclude punch_in/punch_out as they're attendance records, not breaks)
     today = get_local_time().date()
     total_breaks_today = BreakRecord.query.filter(
-        db.func.date(BreakRecord.start_time) == today
+        db.func.date(BreakRecord.start_time) == today,
+        ~BreakRecord.break_type.in_(['punch_in', 'punch_out'])
     ).count()
-    active_breaks = BreakRecord.query.filter_by(end_time=None).count()
+    
+    # Active breaks (exclude punch_in/punch_out)
+    all_active = BreakRecord.query.filter_by(end_time=None).all()
+    active_breaks = len([b for b in all_active if b.break_type not in ['punch_in', 'punch_out']])
+    
     overdue_breaks = BreakRecord.query.filter(
         db.func.date(BreakRecord.start_time) == today,
-        BreakRecord.is_overdue == True
+        BreakRecord.is_overdue == True,
+        ~BreakRecord.break_type.in_(['punch_in', 'punch_out'])
     ).count()
     
     return render_template('dashboard.html',
@@ -414,19 +420,43 @@ def get_breaks():
     
     breaks = query.order_by(BreakRecord.start_time.desc()).all()
     
+    # Separate attendance records (punch_in/punch_out) from breaks
+    attendance_records = [br for br in breaks if br.break_type in ['punch_in', 'punch_out']]
+    regular_breaks = [br for br in breaks if br.break_type not in ['punch_in', 'punch_out']]
+    
     # Group by agent
     agents_data = {}
-    for br in breaks:
+    for br in regular_breaks:
         if br.agent_id not in agents_data:
             agents_data[br.agent_id] = {
                 'agent_name': br.agent.full_name,
-                'breaks': []
+                'breaks': [],
+                'attendance': []
             }
         agents_data[br.agent_id]['breaks'].append(br.to_dict())
     
+    # Add attendance records separately (one screenshot, one time)
+    for br in attendance_records:
+        if br.agent_id not in agents_data:
+            agents_data[br.agent_id] = {
+                'agent_name': br.agent.full_name,
+                'breaks': [],
+                'attendance': []
+            }
+        # Create special attendance record dict (one screenshot, one time)
+        agents_data[br.agent_id]['attendance'].append({
+            'id': br.id,
+            'type': br.break_type,
+            'name': 'Punch In' if br.break_type == 'punch_in' else 'Punch Out',
+            'emoji': '🟢' if br.break_type == 'punch_in' else '🔴',
+            'time': br.start_time.isoformat() if br.start_time else None,
+            'screenshot': br.start_screenshot or br.end_screenshot,  # Use whichever exists (should be same)
+            'notes': br.notes or ''
+        })
+    
     return jsonify({
         'agents': list(agents_data.values()),
-        'total_breaks': len(breaks)
+        'total_breaks': len(regular_breaks)  # Only count regular breaks
     })
 
 
@@ -453,6 +483,7 @@ def start_break():
         return jsonify({'error': 'Invalid break type'}), 400
     
     # Require punch_in before other breaks (except punch_in itself)
+    # Also prevent breaks if already punched out
     if break_type != 'punch_in':
         today = get_local_time().date()
         punch_in = BreakRecord.query.filter(
@@ -464,6 +495,18 @@ def start_break():
         if not punch_in:
             return jsonify({
                 'error': 'You must punch in first before taking any breaks. Please punch in to continue.'
+            }), 400
+        
+        # Check if already punched out
+        punch_out = BreakRecord.query.filter(
+            BreakRecord.agent_id == current_user.id,
+            BreakRecord.break_type == 'punch_out',
+            db.func.date(BreakRecord.start_time) == today
+        ).first()
+        
+        if punch_out:
+            return jsonify({
+                'error': 'You have already punched out for the day. Breaks are no longer available.'
             }), 400
     
     if not screenshot:
@@ -816,10 +859,11 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     # Count emergency breaks
     emergency_count = sum(1 for b in breaks if b.break_type == 'emergency')
     
-    # Count breaks by type
+    # Count breaks by type (exclude punch_in/punch_out as they're attendance, not breaks)
     break_counts = {}
     for b in breaks:
-        break_counts[b.break_type] = break_counts.get(b.break_type, 0) + 1
+        if b.break_type not in ['punch_in', 'punch_out']:
+            break_counts[b.break_type] = break_counts.get(b.break_type, 0) + 1
     
     # Calculate utilization
     # Working time breaks (coaching/meetings) count as working time, not breaks
