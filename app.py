@@ -378,6 +378,7 @@ def dashboard():
         active_breaks=active_breaks,
         overdue_breaks=overdue_breaks,
         break_types=BREAK_INFO,
+        break_durations=BREAK_DURATIONS,
         date_filter=date_filter,
         agent_filter=agent_filter,
         type_filter=type_filter
@@ -1226,10 +1227,10 @@ def export_report():
 def fix_existing_working_time_breaks():
     """One-time fix: Clear is_overdue flag for existing working time breaks"""
     try:
-        # Check if BreakRecord table exists
-        from sqlalchemy import inspect
-        inspector = inspect(db.engine)
-        if 'break_record' not in [table.name for table in inspector.get_table_names()]:
+        # Check if BreakRecord table exists by trying to query
+        try:
+            test_query = BreakRecord.query.limit(1).all()
+        except Exception:
             print("⚠️ Database tables not initialized yet, skipping fix")
             return 0
         
