@@ -5,7 +5,6 @@ Flask-based web app for tracking agent breaks
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory, Response
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import not_
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -288,11 +287,12 @@ def agent_view():
         return redirect(url_for('dashboard'))
     
     # Get active break for this agent (exclude punch_in/punch_out as they're auto-completed)
-    active_break = BreakRecord.query.filter(
+    # Use a more compatible query method
+    all_active = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
-        BreakRecord.end_time == None,
-        not_(BreakRecord.break_type.in_(['punch_in', 'punch_out']))
-    ).first()
+        BreakRecord.end_time == None
+    ).all()
+    active_break = next((b for b in all_active if b.break_type not in ['punch_in', 'punch_out']), None)
     
     # Get today's breaks
     today = get_local_time().date()
@@ -437,11 +437,11 @@ def start_break():
         return jsonify({'error': 'RTM cannot take breaks'}), 403
     
     # Check for active break (exclude punch_in/punch_out as they're auto-completed instantly)
-    active = BreakRecord.query.filter(
+    all_active = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
-        BreakRecord.end_time == None,
-        not_(BreakRecord.break_type.in_(['punch_in', 'punch_out']))
-    ).first()
+        BreakRecord.end_time == None
+    ).all()
+    active = next((b for b in all_active if b.break_type not in ['punch_in', 'punch_out']), None)
     if active:
         return jsonify({'error': 'You already have an active break'}), 400
     
@@ -534,11 +534,11 @@ def end_break():
         return jsonify({'error': 'RTM cannot take breaks'}), 403
     
     # Get active break (exclude punch_in/punch_out as they're auto-completed instantly)
-    active = BreakRecord.query.filter(
+    all_active = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
-        BreakRecord.end_time == None,
-        not_(BreakRecord.break_type.in_(['punch_in', 'punch_out']))
-    ).first()
+        BreakRecord.end_time == None
+    ).all()
+    active = next((b for b in all_active if b.break_type not in ['punch_in', 'punch_out']), None)
     if not active:
         return jsonify({'error': 'No active break to end'}), 400
     
