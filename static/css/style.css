@@ -6,12 +6,14 @@
     --success: #34a853;
     --warning: #fbbc04;
     --danger: #ea4335;
-    --background: #1a1a2e;
-    --surface: #16213e;
-    --surface-light: #0f3460;
-    --text: #ffffff;
-    --text-secondary: #a0a0a0;
-    --border: #2a2a4a;
+    --background: #f5f7fa;
+    --surface: #ffffff;
+    --surface-light: #f8f9fa;
+    --text: #212529;
+    --text-secondary: #6c757d;
+    --border: #dee2e6;
+    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-primary-hover: linear-gradient(135deg, #5568d3 0%, #653a8f 100%);
 }
 
 * {
@@ -129,7 +131,13 @@ body {
 }
 
 .btn-primary {
-    background: var(--primary);
+    background: var(--gradient-primary);
+    color: #ffffff;
+    border: none;
+}
+
+.btn-primary:hover {
+    background: var(--gradient-primary-hover);
 }
 
 .btn-primary:hover {
@@ -180,7 +188,8 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 15px 25px;
-    background: var(--surface);
+    background: var(--gradient-primary);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .header-left {
@@ -192,10 +201,11 @@ body {
 .header-left h1 {
     font-size: 18px;
     font-weight: 700;
+    color: #ffffff;
 }
 
 .header-date {
-    color: var(--text-secondary);
+    color: rgba(255, 255, 255, 0.9);
     font-size: 13px;
 }
 
@@ -217,7 +227,8 @@ body {
 }
 
 .badge-primary {
-    background: var(--primary);
+    background: var(--gradient-primary);
+    color: #ffffff;
 }
 
 /* ==================== APP CONTAINER ==================== */
@@ -263,6 +274,7 @@ body {
 .panel-header h3 {
     font-size: 16px;
     font-weight: 600;
+    color: #ffffff;
 }
 
 /* ==================== STATUS BOX ==================== */
@@ -740,11 +752,14 @@ body {
     align-items: center;
     padding: 15px 20px;
     border-bottom: 1px solid var(--border);
+    background: var(--gradient-primary);
+    border-radius: 15px 15px 0 0;
 }
 
 .modal-header h3 {
     font-size: 16px;
     font-weight: 600;
+    color: #ffffff;
 }
 
 .modal-close {
