@@ -94,8 +94,7 @@
             
             <div class="filter-section">
                 <h4>📅 Schedule Management</h4>
-                <button class="btn btn-primary btn-block" onclick="showShiftModal()">🕐 Manage Shifts (2 Weeks)</button>
-                <button class="btn btn-secondary btn-block" onclick="showSchedulesView()">📋 View All Schedules</button>
+                <button class="btn btn-primary btn-block" onclick="showSchedulesModal()">📋 View All Schedules</button>
             </div>
             
             <hr class="divider">
@@ -106,108 +105,15 @@
             </div>
         </aside>
         
-        <!-- Main: Break Records & Reports -->
+        <!-- Main: Break Records -->
         <main class="main-area">
-            <!-- Tabs -->
-            <div class="tabs">
-                <button class="tab-btn active" data-tab="breaks" onclick="switchTab('breaks')">📋 Break Records</button>
-                <button class="tab-btn" data-tab="reports" onclick="switchTab('reports')">📊 Reports & Export</button>
+            <div class="main-header">
+                <h2>📋 Break Records</h2>
+                <span id="recordsCount" class="records-count"></span>
             </div>
             
-            <!-- Break Records Tab -->
-            <div id="tab-breaks" class="tab-content active">
-                <div class="main-header">
-                    <h2>📋 Break Records</h2>
-                    <span id="recordsCount" class="records-count"></span>
-                </div>
-                
-                <div id="breaksContainer" class="breaks-container">
-                    <div class="loading">Loading breaks...</div>
-                </div>
-            </div>
-            
-            <!-- Reports & Export Tab -->
-            <div id="tab-reports" class="tab-content" style="display: none;">
-                <div class="main-header">
-                    <h2>📊 Reports & Export</h2>
-                </div>
-                
-                <div class="reports-section">
-                    <!-- Date Range -->
-                    <div class="report-controls">
-                        <div class="form-group">
-                            <label>📅 Date Range</label>
-                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                                <input type="date" id="reportStartDate" class="form-input">
-                                <span>to</span>
-                                <input type="date" id="reportEndDate" class="form-input">
-                                <button class="btn btn-sm" onclick="setReportPeriod('today')">Today</button>
-                                <button class="btn btn-sm" onclick="setReportPeriod('week')">7 Days</button>
-                                <button class="btn btn-sm" onclick="setReportPeriod('month')">30 Days</button>
-                                <button class="btn btn-primary" onclick="loadMetrics()">🔍 Generate Report</button>
-                                <button class="btn btn-success" onclick="exportToExcel()">📥 Export to Excel</button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Summary Cards -->
-                    <div class="summary-cards" id="summaryCards" style="display: none;">
-                        <div class="summary-card">
-                            <div class="summary-label">Avg Utilization</div>
-                            <div class="summary-value" id="avgUtilization">0%</div>
-                        </div>
-                        <div class="summary-card">
-                            <div class="summary-label">Avg Adherence</div>
-                            <div class="summary-value" id="avgAdherence">0%</div>
-                        </div>
-                        <div class="summary-card">
-                            <div class="summary-label">Avg Conformance</div>
-                            <div class="summary-value" id="avgConformance">0%</div>
-                        </div>
-                        <div class="summary-card">
-                            <div class="summary-label">Total Incidents</div>
-                            <div class="summary-value" id="totalIncidents">0</div>
-                        </div>
-                        <div class="summary-card">
-                            <div class="summary-label">Total Exceeding</div>
-                            <div class="summary-value" id="totalExceeding">0 min</div>
-                        </div>
-                        <div class="summary-card">
-                            <div class="summary-label">Total Emergency</div>
-                            <div class="summary-value" id="totalEmergency">0</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Metrics Table -->
-                    <div class="metrics-table-container" style="margin-top: 20px;">
-                        <table class="data-table" style="width: 100%;">
-                            <thead>
-                                <tr>
-                                    <th>Agent Name</th>
-                                    <th>Scheduled Hours</th>
-                                    <th>Total Breaks</th>
-                                    <th>Break Time</th>
-                                    <th>Exceeding</th>
-                                    <th>Incidents</th>
-                                    <th>Emergency</th>
-                                    <th>Lunch</th>
-                                    <th>Coaching</th>
-                                    <th>Overtime</th>
-                                    <th>Compensation</th>
-                                    <th>Utilization %</th>
-                                    <th>Adherence %</th>
-                                    <th>Conformance %</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody id="metricsTableBody">
-                                <tr>
-                                    <td colspan="15" class="empty-message">Select date range and click "Generate Report"</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <div id="breaksContainer" class="breaks-container">
+                <div class="loading">Loading breaks...</div>
             </div>
         </main>
     </div>
@@ -255,125 +161,29 @@
     </div>
 </div>
 
-<!-- Shift Management Modal -->
-<div id="shiftModal" class="modal" style="display: none;">
-    <div class="modal-content modal-large">
-        <div class="modal-header">
-            <h3>🕐 Shift Management (2 Weeks)</h3>
-            <button class="modal-close" onclick="hideShiftModal()">×</button>
-        </div>
-        <div class="modal-body">
-            <div class="shift-form">
-                <div class="form-group">
-                    <label>📅 Date Range (Start - End)</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="date" id="shiftStartDate" class="form-input">
-                        <span>to</span>
-                        <input type="date" id="shiftEndDate" class="form-input">
-                        <button class="btn btn-sm" onclick="setTwoWeeks()">Set 2 Weeks</button>
-                    </div>
-                    <small style="color: #666;">Select up to 14 days (2 weeks)</small>
-                </div>
-                
-                <div class="form-group">
-                    <label>⏰ Shift Time</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="time" id="shiftStartTime" class="form-input" value="08:00">
-                        <span>to</span>
-                        <input type="time" id="shiftEndTime" class="form-input" value="17:00">
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label>Quick Templates:</label>
-                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                        <button class="btn btn-sm" onclick="setShiftTemplate('08:00', '17:00')">8 AM - 5 PM</button>
-                        <button class="btn btn-sm" onclick="setShiftTemplate('11:00', '20:00')">11 AM - 8 PM</button>
-                        <button class="btn btn-sm" onclick="setShiftTemplate('13:00', '22:00')">1 PM - 10 PM</button>
-                        <button class="btn btn-sm" onclick="setShiftTemplate('16:00', '01:00')">4 PM - 1 AM</button>
-                        <button class="btn btn-sm" onclick="setShiftTemplate('00:00', '09:00')">12 AM - 9 AM</button>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label>👥 Select Agents</label>
-                    <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
-                        <label style="display: block; margin-bottom: 5px;">
-                            <input type="checkbox" id="selectAllAgents" onchange="toggleAllAgents()">
-                            <strong>Select All</strong>
-                        </label>
-                        <div id="agentCheckboxes">
-                            {% for agent in agents %}
-                            <label style="display: block; margin: 5px 0;">
-                                <input type="checkbox" class="agent-checkbox" value="{{ agent.id }}">
-                                {{ agent.full_name }}
-                            </label>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-                
-                <p id="shiftError" class="error-message"></p>
-                <p id="shiftSuccess" class="success-message" style="display: none;"></p>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button class="btn" onclick="hideShiftModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="saveBulkShifts()">✅ Save Shifts for Selected Period</button>
-        </div>
-    </div>
-</div>
-
 <!-- Schedules View Modal -->
 <div id="schedulesModal" class="modal" style="display: none;">
     <div class="modal-content modal-large">
         <div class="modal-header">
-            <h3>📋 View All Assigned Schedules</h3>
-            <button class="modal-close" onclick="hideSchedulesView()">×</button>
+            <h3>📋 View All Schedules</h3>
+            <button class="modal-close" onclick="hideSchedulesModal()">×</button>
         </div>
         <div class="modal-body">
-            <div class="filter-section" style="margin-bottom: 20px;">
-                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                    <label>📅 Date Range:</label>
-                    <input type="date" id="scheduleViewStartDate" class="form-input">
+            <div class="form-group">
+                <label>📅 Date Range</label>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                    <input type="date" id="schedulesStartDate" class="form-input">
                     <span>to</span>
-                    <input type="date" id="scheduleViewEndDate" class="form-input">
-                    <button class="btn btn-sm btn-primary" onclick="loadSchedules()">🔍 Load Schedules</button>
-                    <button class="btn btn-sm" onclick="setScheduleViewRange('today')">Today</button>
-                    <button class="btn btn-sm" onclick="setScheduleViewRange('week')">This Week</button>
-                    <button class="btn btn-sm" onclick="setScheduleViewRange('month')">This Month</button>
+                    <input type="date" id="schedulesEndDate" class="form-input">
+                    <button class="btn btn-primary" onclick="loadSchedules()">🔍 Load Schedules</button>
                 </div>
             </div>
-            
-            <div id="schedulesLoading" class="loading" style="display: none;">Loading schedules...</div>
-            <div id="schedulesError" class="error-message" style="display: none;"></div>
-            
-            <div id="schedulesContainer" style="overflow-x: auto;">
-                <table class="data-table" style="width: 100%;">
-                    <thead>
-                        <tr>
-                            <th>Agent Name</th>
-                            <th>Date</th>
-                            <th>Start Time</th>
-                            <th>End Time</th>
-                            <th>Duration</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="schedulesTableBody">
-                        <tr>
-                            <td colspan="6" class="empty-message">Select a date range and click "Load Schedules"</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <div id="schedulesSummary" style="margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px; display: none;">
-                <strong>Summary:</strong> <span id="schedulesCount">0</span> shifts found
+            <div id="schedulesContainer" style="max-height: 500px; overflow-y: auto;">
+                <div class="empty-message">Select date range and click "Load Schedules"</div>
             </div>
         </div>
         <div class="modal-footer">
-            <button class="btn" onclick="hideSchedulesView()">Close</button>
+            <button class="btn" onclick="hideSchedulesModal()">Close</button>
         </div>
     </div>
 </div>
@@ -382,77 +192,60 @@
 <div id="manualBreakModal" class="modal" style="display: none;">
     <div class="modal-content modal-large">
         <div class="modal-header">
-            <h3>➕ Add Manual Break Record</h3>
+            <h3>➕ Add Manual Break</h3>
             <button class="modal-close" onclick="hideManualBreakModal()">×</button>
         </div>
         <div class="modal-body">
             <div class="form-group">
-                <label>👤 Select Agent *</label>
-                <select id="manualBreakAgent" class="form-select" required>
-                    <option value="">-- Select Agent --</option>
+                <label>👤 Agent</label>
+                <select id="manualBreakAgent" class="form-select">
+                    <option value="">Select Agent</option>
                     {% for agent in agents %}
                     <option value="{{ agent.id }}">{{ agent.full_name }}</option>
                     {% endfor %}
                 </select>
             </div>
-            
             <div class="form-group">
-                <label>☕ Break Type *</label>
-                <select id="manualBreakType" class="form-select" required>
-                    <option value="">-- Select Break Type --</option>
+                <label>☕ Break Type</label>
+                <select id="manualBreakType" class="form-select">
+                    <option value="">Select Break Type</option>
                     {% for key, info in break_types.items() %}
-                    <option value="{{ key }}">{{ info.emoji }} {{ info.name }} ({{ break_durations[key] }} min)</option>
+                    <option value="{{ key }}">{{ info.emoji }} {{ info.name }}</option>
                     {% endfor %}
                 </select>
             </div>
-            
-            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                <div class="form-group">
-                    <label>📅 Start Date *</label>
-                    <input type="date" id="manualBreakStartDate" class="form-input" required>
-                </div>
-                <div class="form-group">
-                    <label>🕐 Start Time *</label>
-                    <input type="time" id="manualBreakStartTime" class="form-input" required>
+            <div class="form-group">
+                <label>📅 Start Date & Time</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="date" id="manualBreakStartDate" class="form-input">
+                    <input type="time" id="manualBreakStartTime" class="form-input">
                 </div>
             </div>
-            
-            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                <div class="form-group">
-                    <label>📅 End Date (Optional)</label>
+            <div class="form-group">
+                <label>📅 End Date & Time</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
                     <input type="date" id="manualBreakEndDate" class="form-input">
-                    <small style="color: #666;">Leave empty for active break</small>
-                </div>
-                <div class="form-group">
-                    <label>🕐 End Time (Optional)</label>
                     <input type="time" id="manualBreakEndTime" class="form-input">
                 </div>
             </div>
-            
-            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                <div class="form-group">
-                    <label>📷 Start Screenshot (Optional)</label>
-                    <input type="file" id="manualBreakStartScreenshot" class="form-input" accept="image/*">
-                    <small style="color: #666;">Upload screenshot for break start</small>
-                </div>
-                <div class="form-group">
-                    <label>📷 End Screenshot (Optional)</label>
-                    <input type="file" id="manualBreakEndScreenshot" class="form-input" accept="image/*">
-                    <small style="color: #666;">Upload screenshot for break end</small>
-                </div>
-            </div>
-            
             <div class="form-group">
                 <label>📝 Notes (Optional)</label>
-                <textarea id="manualBreakNotes" class="form-input" rows="3" placeholder="Add any notes about this break..."></textarea>
+                <textarea id="manualBreakNotes" class="form-input" rows="3" placeholder="Enter any notes about this break..."></textarea>
             </div>
-            
+            <div class="form-group">
+                <label>📷 Start Screenshot (Optional)</label>
+                <input type="file" id="manualBreakStartScreenshot" class="form-input" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label>📷 End Screenshot (Optional)</label>
+                <input type="file" id="manualBreakEndScreenshot" class="form-input" accept="image/*">
+            </div>
             <p id="manualBreakError" class="error-message"></p>
             <p id="manualBreakSuccess" class="success-message" style="display: none;"></p>
         </div>
         <div class="modal-footer">
             <button class="btn" onclick="hideManualBreakModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="submitManualBreak()">✅ Create Break Record</button>
+            <button class="btn btn-primary" onclick="submitManualBreak()">✅ Create Break</button>
         </div>
     </div>
 </div>

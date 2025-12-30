@@ -645,6 +645,94 @@ def update_notes(break_id):
     return jsonify({'success': True, 'notes': notes})
 
 
+@app.route('/api/break/manual', methods=['POST'])
+@login_required
+def create_manual_break():
+    """Create a manual break record (RTM only)"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    agent_id = request.form.get('agent_id')
+    break_type = request.form.get('break_type')
+    start_date = request.form.get('start_date')
+    start_time = request.form.get('start_time')
+    end_date = request.form.get('end_date')
+    end_time = request.form.get('end_time')
+    notes = request.form.get('notes', '')
+    start_screenshot_file = request.files.get('start_screenshot')
+    end_screenshot_file = request.files.get('end_screenshot')
+    
+    # Validation
+    if not all([agent_id, break_type, start_date, start_time, end_date, end_time]):
+        return jsonify({'error': 'All required fields must be provided'}), 400
+    
+    if break_type not in BREAK_DURATIONS:
+        return jsonify({'error': 'Invalid break type'}), 400
+    
+    # Verify agent exists
+    agent = User.query.filter_by(id=int(agent_id), role=ROLE_AGENT).first()
+    if not agent:
+        return jsonify({'error': 'Agent not found'}), 404
+    
+    try:
+        # Parse dates and times
+        start_datetime = datetime.strptime(f'{start_date} {start_time}', '%Y-%m-%d %H:%M')
+        end_datetime = datetime.strptime(f'{end_date} {end_time}', '%Y-%m-%d %H:%M')
+        
+        if end_datetime <= start_datetime:
+            return jsonify({'error': 'End time must be after start time'}), 400
+        
+        # Save screenshots if provided
+        start_screenshot_path = None
+        end_screenshot_path = None
+        
+        if start_screenshot_file:
+            start_screenshot_path = save_screenshot(start_screenshot_file)
+            if not start_screenshot_path:
+                return jsonify({'error': 'Invalid start screenshot file'}), 400
+        
+        if end_screenshot_file:
+            end_screenshot_path = save_screenshot(end_screenshot_file)
+            if not end_screenshot_path:
+                return jsonify({'error': 'Invalid end screenshot file'}), 400
+        
+        # Calculate duration
+        duration_minutes = int((end_datetime - start_datetime).total_seconds() / 60)
+        
+        # Create break record
+        break_record = BreakRecord(
+            agent_id=int(agent_id),
+            break_type=break_type,
+            start_time=start_datetime.replace(tzinfo=None),
+            end_time=end_datetime.replace(tzinfo=None),
+            start_screenshot=start_screenshot_path,
+            end_screenshot=end_screenshot_path,
+            duration_minutes=duration_minutes,
+            notes=notes
+        )
+        
+        # Set is_overdue based on break type
+        if break_type in WORKING_TIME_BREAKS:
+            break_record.is_overdue = False
+        else:
+            break_record.is_overdue = duration_minutes > break_record.get_allowed_duration()
+        
+        db.session.add(break_record)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Manual break created successfully for {agent.full_name}',
+            'break': break_record.to_dict()
+        })
+        
+    except ValueError as e:
+        return jsonify({'error': f'Invalid date or time format: {str(e)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to create break: {str(e)}'}), 500
+
+
 @app.route('/api/fix/working-time-breaks', methods=['POST'])
 @login_required
 def fix_working_time_breaks_endpoint():

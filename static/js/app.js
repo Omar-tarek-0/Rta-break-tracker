@@ -845,3 +845,181 @@ function exportToExcel() {
     window.location.href = `/api/report/export?start_date=${startDate}&end_date=${endDate}`;
 }
 
+// ==================== SCHEDULES MODAL ====================
+
+function showSchedulesModal() {
+    document.getElementById('schedulesModal').style.display = 'flex';
+    // Set default dates (today to 2 weeks ahead)
+    const today = new Date();
+    const twoWeeksLater = new Date(today);
+    twoWeeksLater.setDate(today.getDate() + 14);
+    
+    document.getElementById('schedulesStartDate').value = today.toISOString().split('T')[0];
+    document.getElementById('schedulesEndDate').value = twoWeeksLater.toISOString().split('T')[0];
+}
+
+function hideSchedulesModal() {
+    document.getElementById('schedulesModal').style.display = 'none';
+}
+
+async function loadSchedules() {
+    const startDate = document.getElementById('schedulesStartDate').value;
+    const endDate = document.getElementById('schedulesEndDate').value;
+    const container = document.getElementById('schedulesContainer');
+    
+    if (!startDate || !endDate) {
+        container.innerHTML = '<div class="error-message">Please select both start and end dates</div>';
+        return;
+    }
+    
+    container.innerHTML = '<div class="loading">Loading schedules...</div>';
+    
+    try {
+        const response = await fetch(`/api/shifts?start_date=${startDate}&end_date=${endDate}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            container.innerHTML = `<div class="error-message">${data.error}</div>`;
+            return;
+        }
+        
+        if (data.shifts.length === 0) {
+            container.innerHTML = '<div class="empty-message">No schedules found for the selected date range</div>';
+            return;
+        }
+        
+        // Group by agent
+        const agentSchedules = {};
+        data.shifts.forEach(shift => {
+            if (!agentSchedules[shift.agent_name]) {
+                agentSchedules[shift.agent_name] = [];
+            }
+            agentSchedules[shift.agent_name].push(shift);
+        });
+        
+        let html = '<div style="display: flex; flex-direction: column; gap: 15px;">';
+        for (const [agentName, shifts] of Object.entries(agentSchedules)) {
+            html += `
+                <div style="background: var(--surface-light); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">
+                    <h4 style="margin: 0 0 10px 0; color: var(--text);">👤 ${agentName}</h4>
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+            `;
+            shifts.forEach(shift => {
+                const date = new Date(shift.shift_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                html += `
+                    <div style="display: flex; justify-content: space-between; padding: 5px; background: var(--surface); border-radius: 4px;">
+                        <span>📅 ${date}</span>
+                        <span>🕐 ${shift.start_time} - ${shift.end_time}</span>
+                    </div>
+                `;
+            });
+            html += '</div></div>';
+        }
+        html += '</div>';
+        
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = `<div class="error-message">Error loading schedules: ${err.message}</div>`;
+    }
+}
+
+// ==================== MANUAL BREAK MODAL ====================
+
+function showManualBreakModal() {
+    document.getElementById('manualBreakModal').style.display = 'flex';
+    // Set default dates to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('manualBreakStartDate').value = today;
+    document.getElementById('manualBreakEndDate').value = today;
+    // Clear previous values
+    document.getElementById('manualBreakAgent').value = '';
+    document.getElementById('manualBreakType').value = '';
+    document.getElementById('manualBreakStartTime').value = '';
+    document.getElementById('manualBreakEndTime').value = '';
+    document.getElementById('manualBreakNotes').value = '';
+    document.getElementById('manualBreakStartScreenshot').value = '';
+    document.getElementById('manualBreakEndScreenshot').value = '';
+    document.getElementById('manualBreakError').textContent = '';
+    document.getElementById('manualBreakSuccess').style.display = 'none';
+}
+
+function hideManualBreakModal() {
+    document.getElementById('manualBreakModal').style.display = 'none';
+}
+
+async function submitManualBreak() {
+    const agentId = document.getElementById('manualBreakAgent').value;
+    const breakType = document.getElementById('manualBreakType').value;
+    const startDate = document.getElementById('manualBreakStartDate').value;
+    const startTime = document.getElementById('manualBreakStartTime').value;
+    const endDate = document.getElementById('manualBreakEndDate').value;
+    const endTime = document.getElementById('manualBreakEndTime').value;
+    const notes = document.getElementById('manualBreakNotes').value;
+    const startScreenshot = document.getElementById('manualBreakStartScreenshot').files[0];
+    const endScreenshot = document.getElementById('manualBreakEndScreenshot').files[0];
+    
+    const errorEl = document.getElementById('manualBreakError');
+    const successEl = document.getElementById('manualBreakSuccess');
+    
+    // Validation
+    if (!agentId || !breakType || !startDate || !startTime || !endDate || !endTime) {
+        errorEl.textContent = 'Please fill in all required fields';
+        return;
+    }
+    
+    errorEl.textContent = '';
+    successEl.style.display = 'none';
+    
+    // Create FormData
+    const formData = new FormData();
+    formData.append('agent_id', agentId);
+    formData.append('break_type', breakType);
+    formData.append('start_date', startDate);
+    formData.append('start_time', startTime);
+    formData.append('end_date', endDate);
+    formData.append('end_time', endTime);
+    if (notes) formData.append('notes', notes);
+    if (startScreenshot) formData.append('start_screenshot', startScreenshot);
+    if (endScreenshot) formData.append('end_screenshot', endScreenshot);
+    
+    try {
+        const response = await fetch('/api/break/manual', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            successEl.textContent = data.message || 'Break created successfully!';
+            successEl.style.display = 'block';
+            errorEl.textContent = '';
+            
+            // Clear form after 2 seconds and reload breaks
+            setTimeout(() => {
+                hideManualBreakModal();
+                loadBreaks();
+            }, 2000);
+        } else {
+            errorEl.textContent = data.error || 'Failed to create break';
+            successEl.style.display = 'none';
+        }
+    } catch (err) {
+        errorEl.textContent = 'Network error: ' + err.message;
+        successEl.style.display = 'none';
+    }
+}
+
+// Close modals when clicking outside
+window.onclick = function(event) {
+    const schedulesModal = document.getElementById('schedulesModal');
+    const manualBreakModal = document.getElementById('manualBreakModal');
+    
+    if (event.target === schedulesModal) {
+        hideSchedulesModal();
+    }
+    if (event.target === manualBreakModal) {
+        hideManualBreakModal();
+    }
+}
+
