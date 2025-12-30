@@ -808,7 +808,7 @@ def create_manual_break():
             agent_id=int(agent_id),
             break_type=break_type,
             start_time=start_datetime.replace(tzinfo=None),
-            end_time=end_datetime.replace(tzinfo=None),
+            end_time=end_datetime.replace(tzinfo=None) if end_datetime else None,
             start_screenshot=start_screenshot_path,
             end_screenshot=end_screenshot_path,
             duration_minutes=duration_minutes,
@@ -816,10 +816,15 @@ def create_manual_break():
         )
         
         # Set is_overdue based on break type
-        if break_type in WORKING_TIME_BREAKS:
+        # punch_in/punch_out and working time breaks are never overdue
+        # Active breaks (no end time) are not overdue yet
+        if break_type in ['punch_in', 'punch_out'] or break_type in WORKING_TIME_BREAKS:
             break_record.is_overdue = False
-        else:
+        elif end_datetime and duration_minutes is not None:
             break_record.is_overdue = duration_minutes > break_record.get_allowed_duration()
+        else:
+            # Active break - not overdue yet
+            break_record.is_overdue = False
         
         db.session.add(break_record)
         db.session.commit()
