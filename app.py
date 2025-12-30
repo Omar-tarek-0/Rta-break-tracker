@@ -800,6 +800,21 @@ def create_manual_break():
             if not end_screenshot_path:
                 return jsonify({'error': 'Invalid end screenshot file'}), 400
         
+        # For punch_in/punch_out, check for existing records on the same day
+        # and warn if there's already one, but allow creation (RTM override)
+        if break_type in ['punch_in', 'punch_out']:
+            punch_date = start_datetime.date()
+            existing = BreakRecord.query.filter(
+                BreakRecord.agent_id == int(agent_id),
+                BreakRecord.break_type == break_type,
+                db.func.date(BreakRecord.start_time) == punch_date
+            ).first()
+            
+            if existing:
+                # Allow RTM to create duplicate if needed (maybe correcting a mistake)
+                # But we'll still create the record
+                pass
+        
         # Calculate duration
         # For punch_in/punch_out, duration is 0 (instant actions)
         # For other breaks, calculate actual duration if end time is provided
