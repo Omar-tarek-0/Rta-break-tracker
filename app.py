@@ -1113,9 +1113,11 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     
     # Separate breaks into working time breaks and regular breaks
     working_time_breaks = [b for b in breaks if b.break_type in WORKING_TIME_BREAKS and b.end_time]
+    # Regular breaks include emergency (emergency counts as break time, not working time)
     regular_breaks = [b for b in breaks if b.break_type not in WORKING_TIME_BREAKS + ['punch_in', 'punch_out'] and b.end_time]
     
-    # Total break minutes (excluding working time breaks and punch records)
+    # Total break minutes (including emergency - emergency counts as break time)
+    # Excluding working time breaks and punch records
     total_break_minutes = sum(b.duration_minutes or 0 for b in regular_breaks)
     total_allowed_break_minutes = sum(b.get_allowed_duration() for b in regular_breaks)
     exceeding_break_minutes = max(0, total_break_minutes - total_allowed_break_minutes)
@@ -1139,12 +1141,20 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
             break_counts[b.break_type] = break_counts.get(b.break_type, 0) + 1
     
     # Calculate utilization
-    # Working time breaks (coaching/meetings) count as working time, not breaks
-    # Time worked = scheduled time - regular break time taken
-    if total_scheduled_minutes > 0:
-        time_worked = total_scheduled_minutes - total_break_minutes
-        utilization = (time_worked / total_scheduled_minutes) * 100
-        utilization = min(100.0, utilization)  # Cap at 100%
+    # Working time breaks (coaching/meetings/overtime) count as working time, not breaks
+    # Emergency breaks count as break time and reduce utilization
+    # Expected working hours: 8 hours per shift = 480 minutes
+    # Allocated break time: 1 hour 15 minutes per shift = 75 minutes
+    if len(shifts) > 0:
+        expected_working_minutes = len(shifts) * 8 * 60  # 8 hours per shift = 480 minutes
+        expected_break_minutes = len(shifts) * 75  # 75 minutes per shift (1 hour 15 minutes allocated break time)
+        
+        # If breaks exceed allocated time, utilization decreases
+        # Emergency breaks are included in total_break_minutes (they count as break time)
+        excess_break_minutes = max(0, total_break_minutes - expected_break_minutes)
+        actual_working_time = expected_working_minutes - excess_break_minutes
+        utilization = (actual_working_time / expected_working_minutes) * 100
+        utilization = min(100.0, max(0.0, utilization))  # Cap between 0% and 100%
     else:
         utilization = 0
     
