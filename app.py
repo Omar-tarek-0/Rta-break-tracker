@@ -801,7 +801,17 @@ def create_manual_break():
                 return jsonify({'error': 'Invalid end screenshot file'}), 400
         
         # Calculate duration
-        duration_minutes = int((end_datetime - start_datetime).total_seconds() / 60)
+        # For punch_in/punch_out, duration is 0 (instant actions)
+        # For other breaks, calculate actual duration if end time is provided
+        if break_type in ['punch_in', 'punch_out']:
+            duration_minutes = 0
+            # For punch_in/punch_out, use the same time for both start and end
+            end_datetime = start_datetime
+        elif end_datetime:
+            duration_minutes = int((end_datetime - start_datetime).total_seconds() / 60)
+        else:
+            # Active break (no end time provided)
+            duration_minutes = None
         
         # Create break record
         break_record = BreakRecord(
