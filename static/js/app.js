@@ -422,7 +422,7 @@ function createAgentCard(agent) {
 }
 
 function createAttendanceCard(att) {
-    const time = new Date(att.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const time = new Date(att.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
     return `
         <div class="attendance-card" style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding: 8px; background: var(--surface-light); border-radius: 6px;">
             <span style="font-size: 16px;">${att.emoji}</span>

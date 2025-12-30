@@ -86,11 +86,15 @@
                             {% for br in today_breaks %}
                             <div class="history-card {% if br.is_active() %}active{% elif br.is_overdue %}overdue{% else %}completed{% endif %}">
                                 <div class="history-info">
-                                    <span class="history-type">{{ br.get_break_info().emoji }} {{ br.start_time.strftime('%I:%M %p') }}</span>
-                                    {% if br.end_time %}
-                                        <span> → {{ br.end_time.strftime('%I:%M %p') }}</span>
+                                    {% if br.break_type in ['punch_in', 'punch_out'] %}
+                                        <span class="history-type">{{ br.get_break_info().emoji }} {{ br.start_time.strftime('%H:%M') }}</span>
                                     {% else %}
-                                        <span> → ⏳ On Break...</span>
+                                        <span class="history-type">{{ br.get_break_info().emoji }} {{ br.start_time.strftime('%I:%M %p') }}</span>
+                                        {% if br.end_time %}
+                                            <span> → {{ br.end_time.strftime('%I:%M %p') }}</span>
+                                        {% else %}
+                                            <span> → ⏳ On Break...</span>
+                                        {% endif %}
                                     {% endif %}
                                 </div>
                                 <div class="history-status">
