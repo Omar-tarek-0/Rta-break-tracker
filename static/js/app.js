@@ -422,6 +422,56 @@ function createAgentCard(agent) {
 }
 
 function createAttendanceCard(att) {
+    // If it's a paired punch in/out, show both together
+    if (att.type === 'punch_pair') {
+        const punchInTime = att.punch_in.time 
+            ? new Date(att.punch_in.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+            : 'N/A';
+        const punchInDate = att.punch_in.date 
+            ? new Date(att.punch_in.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : '';
+        
+        let punchOutSection = '';
+        if (att.punch_out) {
+            const punchOutTime = att.punch_out.time 
+                ? new Date(att.punch_out.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+                : 'N/A';
+            const punchOutDate = att.punch_out.date 
+                ? new Date(att.punch_out.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : '';
+            
+            punchOutSection = `
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);">
+                    <span style="font-size: 16px;">🔴</span>
+                    <span style="font-weight: 600; flex: 1;">Punch Out</span>
+                    <span style="font-size: 11px; color: var(--text-secondary);">${punchOutDate}</span>
+                    <span style="font-size: 12px; color: var(--text-secondary);">🕐 ${punchOutTime}</span>
+                    ${att.punch_out.screenshot 
+                        ? `<img src="/uploads/${att.punch_out.screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${att.punch_out.screenshot}', 'Punch Out Screenshot')" style="width: 40px; height: 30px; object-fit: cover; border-radius: 4px; cursor: pointer;">`
+                        : '<div style="width: 40px; height: 30px; background: var(--border); border-radius: 4px;"></div>'
+                    }
+                </div>
+            `;
+        }
+        
+        return `
+            <div class="attendance-card" style="margin-bottom: 12px; padding: 12px; background: var(--surface-light); border-radius: 8px; border: 1px solid var(--border);">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 16px;">🟢</span>
+                    <span style="font-weight: 600; flex: 1;">Punch In</span>
+                    <span style="font-size: 11px; color: var(--text-secondary);">${punchInDate}</span>
+                    <span style="font-size: 12px; color: var(--text-secondary);">🕐 ${punchInTime}</span>
+                    ${att.punch_in.screenshot 
+                        ? `<img src="/uploads/${att.punch_in.screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${att.punch_in.screenshot}', 'Punch In Screenshot')" style="width: 40px; height: 30px; object-fit: cover; border-radius: 4px; cursor: pointer;">`
+                        : '<div style="width: 40px; height: 30px; background: var(--border); border-radius: 4px;"></div>'
+                    }
+                </div>
+                ${punchOutSection}
+            </div>
+        `;
+    }
+    
+    // Single attendance record (standalone punch out)
     const time = new Date(att.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
     return `
         <div class="attendance-card" style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding: 8px; background: var(--surface-light); border-radius: 6px;">

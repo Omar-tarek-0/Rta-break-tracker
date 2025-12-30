@@ -406,7 +406,7 @@ def get_breaks():
     agent_id = request.args.get('agent_id', '')
     break_type = request.args.get('break_type', '')
     
-    # Build query
+    # Build query for regular breaks
     query = BreakRecord.query.filter(
         db.func.date(BreakRecord.start_time) >= start_date,
         db.func.date(BreakRecord.start_time) <= end_date
@@ -424,6 +424,43 @@ def get_breaks():
     attendance_records = [br for br in breaks if br.break_type in ['punch_in', 'punch_out']]
     regular_breaks = [br for br in breaks if br.break_type not in ['punch_in', 'punch_out']]
     
+    # For attendance records, also fetch punch outs that pair with punch ins in the date range
+    # This handles cases where punch in is on day 1 and punch out is on day 2
+    if attendance_records:
+        # Get all punch ins in the date range
+        punch_in_ids = [br.id for br in attendance_records if br.break_type == 'punch_in']
+        
+        if punch_in_ids:
+            # Find punch outs that might be paired with these punch ins
+            # Look for punch outs within 24 hours after each punch in
+            extended_attendance = list(attendance_records)
+            
+            for punch_in in attendance_records:
+                if punch_in.break_type == 'punch_in' and punch_in.start_time:
+                    # Look for punch out within next 2 days (to handle overnight shifts)
+                    punch_in_time = punch_in.start_time
+                    max_punch_out_time = punch_in_time + timedelta(days=2)
+                    
+                    # Query for matching punch out
+                    punch_out_query = BreakRecord.query.filter(
+                        BreakRecord.agent_id == punch_in.agent_id,
+                        BreakRecord.break_type == 'punch_out',
+                        BreakRecord.start_time > punch_in_time,
+                        BreakRecord.start_time <= max_punch_out_time
+                    )
+                    
+                    if agent_id:
+                        punch_out_query = punch_out_query.filter_by(agent_id=int(agent_id))
+                    
+                    matching_punch_outs = punch_out_query.all()
+                    
+                    # Add punch outs that aren't already in the list
+                    for po in matching_punch_outs:
+                        if po not in extended_attendance:
+                            extended_attendance.append(po)
+            
+            attendance_records = extended_attendance
+    
     # Group by agent
     agents_data = {}
     for br in regular_breaks:
@@ -435,24 +472,72 @@ def get_breaks():
             }
         agents_data[br.agent_id]['breaks'].append(br.to_dict())
     
-    # Add attendance records separately (one screenshot, one time)
+    # Group attendance records by agent and pair punch in/out together
+    # Sort attendance records by time
+    attendance_records.sort(key=lambda x: x.start_time if x.start_time else datetime.min)
+    
+    # Group by agent first
+    agent_attendance = {}
     for br in attendance_records:
-        if br.agent_id not in agents_data:
-            agents_data[br.agent_id] = {
-                'agent_name': br.agent.full_name,
+        if br.agent_id not in agent_attendance:
+            agent_attendance[br.agent_id] = []
+        agent_attendance[br.agent_id].append(br)
+    
+    # Pair punch in with punch out for each agent
+    for agent_id, records in agent_attendance.items():
+        if agent_id not in agents_data:
+            agents_data[agent_id] = {
+                'agent_name': records[0].agent.full_name,
                 'breaks': [],
                 'attendance': []
             }
-        # Create special attendance record dict (one screenshot, one time)
-        agents_data[br.agent_id]['attendance'].append({
-            'id': br.id,
-            'type': br.break_type,
-            'name': 'Punch In' if br.break_type == 'punch_in' else 'Punch Out',
-            'emoji': '🟢' if br.break_type == 'punch_in' else '🔴',
-            'time': br.start_time.isoformat() if br.start_time else None,
-            'screenshot': br.start_screenshot or br.end_screenshot,  # Use whichever exists (should be same)
-            'notes': br.notes or ''
-        })
+        
+        # Pair punch in with the next punch out
+        i = 0
+        while i < len(records):
+            current = records[i]
+            if current.break_type == 'punch_in':
+                # Look for the next punch out (could be on same day or next day)
+                punch_out = None
+                for j in range(i + 1, len(records)):
+                    if records[j].break_type == 'punch_out':
+                        punch_out = records[j]
+                        i = j + 1  # Skip the punch out in next iteration
+                        break
+                
+                # Create combined attendance record
+                agents_data[agent_id]['attendance'].append({
+                    'id': current.id,
+                    'type': 'punch_pair',
+                    'punch_in': {
+                        'id': current.id,
+                        'time': current.start_time.isoformat() if current.start_time else None,
+                        'screenshot': current.start_screenshot or current.end_screenshot,
+                        'date': current.start_time.date().isoformat() if current.start_time else None
+                    },
+                    'punch_out': {
+                        'id': punch_out.id if punch_out else None,
+                        'time': punch_out.start_time.isoformat() if punch_out and punch_out.start_time else None,
+                        'screenshot': (punch_out.start_screenshot or punch_out.end_screenshot) if punch_out else None,
+                        'date': punch_out.start_time.date().isoformat() if punch_out and punch_out.start_time else None
+                    } if punch_out else None,
+                    'notes': current.notes or ''
+                })
+                
+                if not punch_out:
+                    i += 1  # No punch out found, move to next
+            else:
+                # Standalone punch out (no matching punch in) - show separately
+                agents_data[agent_id]['attendance'].append({
+                    'id': current.id,
+                    'type': 'punch_out',
+                    'name': 'Punch Out',
+                    'emoji': '🔴',
+                    'time': current.start_time.isoformat() if current.start_time else None,
+                    'screenshot': current.start_screenshot or current.end_screenshot,
+                    'notes': current.notes or ''
+                })
+                i += 1
     
     return jsonify({
         'agents': list(agents_data.values()),
