@@ -426,40 +426,63 @@ def get_breaks():
     
     # For attendance records, also fetch punch outs that pair with punch ins in the date range
     # This handles cases where punch in is on day 1 and punch out is on day 2
+    # This works for both regular breaks and manually created breaks
     if attendance_records:
-        # Get all punch ins in the date range
-        punch_in_ids = [br.id for br in attendance_records if br.break_type == 'punch_in']
+        # Find punch outs that might be paired with punch ins in the date range
+        # Look for punch outs within 2 days after each punch in (to handle overnight shifts)
+        extended_attendance = list(attendance_records)
         
-        if punch_in_ids:
-            # Find punch outs that might be paired with these punch ins
-            # Look for punch outs within 24 hours after each punch in
-            extended_attendance = list(attendance_records)
-            
-            for punch_in in attendance_records:
-                if punch_in.break_type == 'punch_in' and punch_in.start_time:
-                    # Look for punch out within next 2 days (to handle overnight shifts)
-                    punch_in_time = punch_in.start_time
-                    max_punch_out_time = punch_in_time + timedelta(days=2)
-                    
-                    # Query for matching punch out
-                    punch_out_query = BreakRecord.query.filter(
-                        BreakRecord.agent_id == punch_in.agent_id,
-                        BreakRecord.break_type == 'punch_out',
-                        BreakRecord.start_time > punch_in_time,
-                        BreakRecord.start_time <= max_punch_out_time
-                    )
-                    
-                    if agent_id:
-                        punch_out_query = punch_out_query.filter_by(agent_id=int(agent_id))
-                    
-                    matching_punch_outs = punch_out_query.all()
-                    
-                    # Add punch outs that aren't already in the list
-                    for po in matching_punch_outs:
-                        if po not in extended_attendance:
-                            extended_attendance.append(po)
-            
-            attendance_records = extended_attendance
+        for punch_in in attendance_records:
+            if punch_in.break_type == 'punch_in' and punch_in.start_time:
+                # Look for punch out within next 2 days (to handle overnight shifts)
+                punch_in_time = punch_in.start_time
+                max_punch_out_time = punch_in_time + timedelta(days=2)
+                
+                # Query for matching punch out (same agent, after punch in, within 2 days)
+                punch_out_query = BreakRecord.query.filter(
+                    BreakRecord.agent_id == punch_in.agent_id,
+                    BreakRecord.break_type == 'punch_out',
+                    BreakRecord.start_time > punch_in_time,
+                    BreakRecord.start_time <= max_punch_out_time
+                )
+                
+                if agent_id:
+                    punch_out_query = punch_out_query.filter_by(agent_id=int(agent_id))
+                
+                matching_punch_outs = punch_out_query.all()
+                
+                # Add punch outs that aren't already in the list
+                for po in matching_punch_outs:
+                    if po not in extended_attendance:
+                        extended_attendance.append(po)
+        
+        # Also find punch ins that pair with punch outs in the date range
+        # (in case punch out was created first or manually added)
+        for punch_out in attendance_records:
+            if punch_out.break_type == 'punch_out' and punch_out.start_time:
+                # Look for punch in within 2 days before this punch out
+                punch_out_time = punch_out.start_time
+                min_punch_in_time = punch_out_time - timedelta(days=2)
+                
+                # Query for matching punch in (same agent, before punch out, within 2 days)
+                punch_in_query = BreakRecord.query.filter(
+                    BreakRecord.agent_id == punch_out.agent_id,
+                    BreakRecord.break_type == 'punch_in',
+                    BreakRecord.start_time >= min_punch_in_time,
+                    BreakRecord.start_time < punch_out_time
+                )
+                
+                if agent_id:
+                    punch_in_query = punch_in_query.filter_by(agent_id=int(agent_id))
+                
+                matching_punch_ins = punch_in_query.all()
+                
+                # Add punch ins that aren't already in the list
+                for pi in matching_punch_ins:
+                    if pi not in extended_attendance:
+                        extended_attendance.append(pi)
+        
+        attendance_records = extended_attendance
     
     # Group by agent
     agents_data = {}
