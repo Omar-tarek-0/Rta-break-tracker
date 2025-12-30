@@ -764,8 +764,15 @@ def create_manual_break():
         start_datetime = datetime.strptime(f'{start_date} {start_time}', '%Y-%m-%d %H:%M')
         end_datetime = datetime.strptime(f'{end_date} {end_time}', '%Y-%m-%d %H:%M')
         
-        if end_datetime <= start_datetime:
-            return jsonify({'error': 'End time must be after start time'}), 400
+        # For punch_in and punch_out, start and end times can be the same (instant actions)
+        # For other break types, end time must be after start time
+        if break_type not in ['punch_in', 'punch_out']:
+            if end_datetime <= start_datetime:
+                return jsonify({'error': 'End time must be after start time'}), 400
+        else:
+            # For punch_in/punch_out, if end time is before start time, set it equal to start time
+            if end_datetime < start_datetime:
+                end_datetime = start_datetime
         
         # Save screenshots if provided
         start_screenshot_path = None
