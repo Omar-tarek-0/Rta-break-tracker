@@ -747,9 +747,9 @@ def create_manual_break():
     start_screenshot_file = request.files.get('start_screenshot')
     end_screenshot_file = request.files.get('end_screenshot')
     
-    # Validation
-    if not all([agent_id, break_type, start_date, start_time, end_date, end_time]):
-        return jsonify({'error': 'All required fields must be provided'}), 400
+    # Validation - start date/time are required, end date/time are optional
+    if not all([agent_id, break_type, start_date, start_time]):
+        return jsonify({'error': 'Agent, break type, start date, and start time are required'}), 400
     
     if break_type not in BREAK_DURATIONS:
         return jsonify({'error': 'Invalid break type'}), 400
@@ -760,19 +760,31 @@ def create_manual_break():
         return jsonify({'error': 'Agent not found'}), 404
     
     try:
-        # Parse dates and times
+        # Parse start date and time
         start_datetime = datetime.strptime(f'{start_date} {start_time}', '%Y-%m-%d %H:%M')
-        end_datetime = datetime.strptime(f'{end_date} {end_time}', '%Y-%m-%d %H:%M')
         
-        # For punch_in and punch_out, start and end times can be the same (instant actions)
-        # For other break types, end time must be after start time
-        if break_type not in ['punch_in', 'punch_out']:
-            if end_datetime <= start_datetime:
-                return jsonify({'error': 'End time must be after start time'}), 400
+        # Parse end date and time (optional - defaults to start time if not provided)
+        if end_date and end_time:
+            end_datetime = datetime.strptime(f'{end_date} {end_time}', '%Y-%m-%d %H:%M')
+            
+            # For punch_in and punch_out, start and end times can be the same (instant actions)
+            # For other break types, end time must be after start time
+            if break_type not in ['punch_in', 'punch_out']:
+                if end_datetime <= start_datetime:
+                    return jsonify({'error': 'End time must be after start time'}), 400
+            else:
+                # For punch_in/punch_out, if end time is before start time, set it equal to start time
+                if end_datetime < start_datetime:
+                    end_datetime = start_datetime
         else:
-            # For punch_in/punch_out, if end time is before start time, set it equal to start time
-            if end_datetime < start_datetime:
+            # End time not provided - use start time (for instant actions like punch_in/punch_out)
+            # or leave as None for active breaks
+            if break_type in ['punch_in', 'punch_out']:
+                # For punch_in/punch_out, end time equals start time (instant action)
                 end_datetime = start_datetime
+            else:
+                # For other breaks, if end time not provided, leave it as None (active break)
+                end_datetime = None
         
         # Save screenshots if provided
         start_screenshot_path = None
