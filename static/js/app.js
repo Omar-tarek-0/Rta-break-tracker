@@ -1013,9 +1013,9 @@ async function submitManualBreak() {
     const errorEl = document.getElementById('manualBreakError');
     const successEl = document.getElementById('manualBreakSuccess');
     
-    // Validation
-    if (!agentId || !breakType || !startDate || !startTime || !endDate || !endTime) {
-        errorEl.textContent = 'Please fill in all required fields';
+    // Validation - only agent, break type, start date, and start time are required
+    if (!agentId || !breakType || !startDate || !startTime) {
+        errorEl.textContent = 'Please fill in all required fields: Agent, Break Type, Start Date, and Start Time';
         return;
     }
     
@@ -1028,8 +1028,9 @@ async function submitManualBreak() {
     formData.append('break_type', breakType);
     formData.append('start_date', startDate);
     formData.append('start_time', startTime);
-    formData.append('end_date', endDate);
-    formData.append('end_time', endTime);
+    // End date and time are optional
+    if (endDate) formData.append('end_date', endDate);
+    if (endTime) formData.append('end_time', endTime);
     if (notes) formData.append('notes', notes);
     if (startScreenshot) formData.append('start_screenshot', startScreenshot);
     if (endScreenshot) formData.append('end_screenshot', endScreenshot);
