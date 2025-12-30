@@ -959,6 +959,11 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     # Count emergency breaks
     emergency_count = sum(1 for b in breaks if b.break_type == 'emergency')
     
+    # Count overtime breaks (in minutes)
+    overtime_breaks = [b for b in breaks if b.break_type == 'overtime' and b.end_time]
+    overtime_count = len(overtime_breaks)
+    overtime_minutes = sum(b.duration_minutes or 0 for b in overtime_breaks)
+    
     # Count breaks by type (exclude punch_in/punch_out as they're attendance, not breaks)
     break_counts = {}
     for b in breaks:
