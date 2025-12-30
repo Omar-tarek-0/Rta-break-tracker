@@ -799,6 +799,17 @@ def create_manual_break():
                 # For punch_in/punch_out, if end time is before start time, set it equal to start time
                 if end_datetime < start_datetime:
                     end_datetime = start_datetime
+        elif end_time:
+            # End time provided but no end date - use start date
+            end_datetime = datetime.strptime(f'{start_date} {end_time}', '%Y-%m-%d %H:%M')
+            
+            # For punch_in and punch_out, start and end times can be the same
+            if break_type not in ['punch_in', 'punch_out']:
+                if end_datetime <= start_datetime:
+                    return jsonify({'error': 'End time must be after start time'}), 400
+            else:
+                if end_datetime < start_datetime:
+                    end_datetime = start_datetime
         else:
             # End time not provided - use start time (for instant actions like punch_in/punch_out)
             # or leave as None for active breaks
