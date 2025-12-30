@@ -1256,10 +1256,27 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     else:
         adherence = 100  # No data = 100% adherence (default)
     
-    # Conformance (similar to adherence but measures schedule following)
-    # For simplicity: conformance = did agent have shifts and follow them
+    # Conformance: measures if agent worked the expected hours
+    # Expected: 8 hours per shift
+    # Actual: scheduled time - excess break time (breaks beyond allocated 75 minutes)
+    # Compensation can add working time back
     if len(shifts) > 0:
-        conformance = adherence  # Using same logic for now
+        expected_working_minutes = len(shifts) * 8 * 60  # 8 hours per shift
+        expected_break_minutes = len(shifts) * 75  # 75 minutes allocated break time per shift
+        
+        # Get compensation minutes (compensation adds working time)
+        compensation_minutes = sum(
+            b.duration_minutes or 0 
+            for b in breaks 
+            if b.break_type == 'compensation' and b.end_time
+        )
+        
+        # Calculate actual working time
+        # Emergency breaks are included in total_break_minutes (they reduce working time)
+        excess_break_minutes = max(0, total_break_minutes - expected_break_minutes)
+        actual_working_minutes = expected_working_minutes - excess_break_minutes + compensation_minutes
+        
+        conformance = min(100.0, (actual_working_minutes / expected_working_minutes) * 100)
     else:
         conformance = 0  # No shifts assigned = 0% conformance
     
