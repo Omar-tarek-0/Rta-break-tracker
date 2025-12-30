@@ -20,8 +20,8 @@ from config import (
 )
 import pytz
 
-# Break types that count as working time (meetings/coaching)
-WORKING_TIME_BREAKS = ['coaching_aya', 'coaching_mostafa', 'meeting_team_leader']
+# Break types that count as working time (meetings/coaching/overtime)
+WORKING_TIME_BREAKS = ['coaching_aya', 'coaching_mostafa', 'meeting_team_leader', 'overtime']
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
@@ -1087,6 +1087,8 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         'exceeding_break_minutes': exceeding_break_minutes,
         'incidents': incidents,
         'emergency_count': emergency_count,
+        'overtime_count': overtime_count,
+        'overtime_minutes': overtime_minutes,
         'total_breaks': len(breaks),
         'completed_breaks': total_completed_breaks,
         'utilization': round(utilization, 1),
@@ -1116,6 +1118,8 @@ def get_metrics():
         'exceeding_break_minutes': 0,
         'incidents': 0,
         'emergency_count': 0,
+        'overtime_count': 0,
+        'overtime_minutes': 0,
         'total_breaks': 0,
         'utilization_sum': 0,
         'adherence_sum': 0,
@@ -1138,6 +1142,8 @@ def get_metrics():
         totals['exceeding_break_minutes'] += metrics['exceeding_break_minutes']
         totals['incidents'] += metrics['incidents']
         totals['emergency_count'] += metrics['emergency_count']
+        totals['overtime_count'] += metrics['overtime_count']
+        totals['overtime_minutes'] += metrics['overtime_minutes']
         totals['total_breaks'] += metrics['total_breaks']
         if metrics['shifts_count'] > 0:
             totals['utilization_sum'] += metrics['utilization']
@@ -1197,7 +1203,7 @@ def export_report():
     bad_fill = PatternFill(start_color="ffc7ce", end_color="ffc7ce", fill_type="solid")
     
     # Title
-    ws.merge_cells('A1:M1')
+    ws.merge_cells('A1:O1')
     ws['A1'] = f"RTA Agent Metrics Report ({start_date} to {end_date})"
     ws['A1'].font = Font(bold=True, size=14)
     ws['A1'].alignment = Alignment(horizontal="center")
@@ -1213,6 +1219,8 @@ def export_report():
         "Exceeding (min)",
         "Incidents",
         "Emergency",
+        "Overtime",
+        "Overtime (min)",
         "Utilization %",
         "Adherence %",
         "Conformance %",
@@ -1266,6 +1274,8 @@ def export_report():
             metrics['exceeding_break_minutes'],
             metrics['incidents'],
             metrics['emergency_count'],
+            metrics['overtime_count'],
+            metrics['overtime_minutes'],
             metrics['utilization'],
             metrics['adherence'],
             metrics['conformance'],
@@ -1276,7 +1286,7 @@ def export_report():
             cell = ws.cell(row=row, column=col, value=value)
             cell.alignment = cell_alignment
             cell.border = border
-            if col == 13:  # Status column
+            if col == 15:  # Status column
                 cell.fill = status_fill
         
         # Accumulate totals
@@ -1286,6 +1296,8 @@ def export_report():
         total_metrics['exceeding'] += metrics['exceeding_break_minutes']
         total_metrics['incidents'] += metrics['incidents']
         total_metrics['emergency'] += metrics['emergency_count']
+        total_metrics['overtime_count'] = total_metrics.get('overtime_count', 0) + metrics['overtime_count']
+        total_metrics['overtime_minutes'] = total_metrics.get('overtime_minutes', 0) + metrics['overtime_minutes']
         total_metrics['breaks'] += metrics['total_breaks']
         if metrics['shifts_count'] > 0:
             total_metrics['util_sum'] += metrics['utilization']
@@ -1313,6 +1325,8 @@ def export_report():
         total_metrics['exceeding'],
         total_metrics['incidents'],
         total_metrics['emergency'],
+        total_metrics.get('overtime_count', 0),
+        total_metrics.get('overtime_minutes', 0),
         avg_util,
         avg_adh,
         avg_conf,
@@ -1327,7 +1341,7 @@ def export_report():
         cell.fill = total_fill
     
     # Adjust column widths
-    column_widths = [20, 15, 15, 12, 15, 15, 12, 10, 10, 12, 12, 12, 15]
+    column_widths = [20, 15, 15, 12, 15, 15, 12, 10, 10, 10, 12, 12, 12, 12, 15]
     for i, width in enumerate(column_widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = width
     

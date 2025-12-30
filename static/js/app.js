@@ -766,14 +766,14 @@ async function loadMetrics() {
     }
     
     const tbody = document.getElementById('metricsTableBody');
-    tbody.innerHTML = '<tr><td colspan="13" class="loading">Loading metrics...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" class="loading">Loading metrics...</td></tr>';
     
     try {
         const response = await fetch(`/api/report/metrics?start_date=${startDate}&end_date=${endDate}`);
         const data = await response.json();
         
         if (data.error) {
-            tbody.innerHTML = `<tr><td colspan="13" class="error-message">${data.error}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="15" class="error-message">${data.error}</td></tr>`;
             return;
         }
         
@@ -788,7 +788,7 @@ async function loadMetrics() {
         
         // Populate table
         if (data.agents.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="13" class="empty-message">No agents found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="15" class="empty-message">No agents found</td></tr>';
             return;
         }
         
@@ -817,6 +817,8 @@ async function loadMetrics() {
                 <td>${agent.exceeding_break_minutes} min</td>
                 <td>${agent.incidents}</td>
                 <td>${agent.emergency_count}</td>
+                <td>${agent.overtime_count || 0}</td>
+                <td>${agent.overtime_minutes || 0} min</td>
                 <td>${agent.lunch_count || 0}</td>
                 <td>${agent.coaching_count || 0}</td>
                 <td>${agent.utilization}%</td>
