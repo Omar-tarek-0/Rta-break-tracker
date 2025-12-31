@@ -1207,9 +1207,10 @@ async function submitManualBreak() {
 
 function showAddShiftModal() {
     document.getElementById('addShiftModal').style.display = 'flex';
-    // Set default date to today
+    // Set default dates to today
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('shiftDate').value = today;
+    document.getElementById('shiftStartDate').value = today;
+    document.getElementById('shiftEndDate').value = today;
     // Clear previous values
     document.getElementById('shiftAgent').value = '';
     document.getElementById('shiftStartTime').value = '';
@@ -1222,11 +1223,12 @@ function hideAddShiftModal() {
 
 async function submitShift() {
     const agentId = document.getElementById('shiftAgent').value;
-    const shiftDate = document.getElementById('shiftDate').value;
+    const startDate = document.getElementById('shiftStartDate').value;
     const startTime = document.getElementById('shiftStartTime').value;
+    const endDate = document.getElementById('shiftEndDate').value;
     const endTime = document.getElementById('shiftEndTime').value;
     
-    if (!agentId || !shiftDate || !startTime || !endTime) {
+    if (!agentId || !startDate || !startTime || !endDate || !endTime) {
         alert('Please fill in all fields');
         return;
     }
@@ -1239,8 +1241,9 @@ async function submitShift() {
             },
             body: JSON.stringify({
                 agent_id: parseInt(agentId),
-                shift_date: shiftDate,
+                start_date: startDate,
                 start_time: startTime,
+                end_date: endDate,
                 end_time: endTime
             })
         });

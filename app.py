@@ -81,8 +81,9 @@ class Shift(db.Model):
     """Shift model for tracking agent work schedules"""
     id = db.Column(db.Integer, primary_key=True)
     agent_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    shift_date = db.Column(db.Date, nullable=False)
+    start_date = db.Column(db.Date, nullable=False)
     start_time = db.Column(db.Time, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'))
@@ -91,20 +92,24 @@ class Shift(db.Model):
     
     def get_duration_hours(self):
         """Calculate shift duration in hours"""
-        start = datetime.combine(self.shift_date, self.start_time)
-        end = datetime.combine(self.shift_date, self.end_time)
-        if end < start:  # Overnight shift
-            end += timedelta(days=1)
+        start = datetime.combine(self.start_date, self.start_time)
+        end = datetime.combine(self.end_date, self.end_time)
         return (end - start).total_seconds() / 3600
+    
+    def get_shift_date(self):
+        """Get the primary shift date (start date) for backward compatibility"""
+        return self.start_date
     
     def to_dict(self):
         return {
             'id': self.id,
             'agent_id': self.agent_id,
             'agent_name': self.agent.full_name if self.agent else 'Unknown',
-            'shift_date': self.shift_date.isoformat(),
+            'start_date': self.start_date.isoformat(),
             'start_time': self.start_time.strftime('%H:%M'),
+            'end_date': self.end_date.isoformat(),
             'end_time': self.end_time.strftime('%H:%M'),
+            'shift_date': self.start_date.isoformat(),  # For backward compatibility
             'duration_hours': round(self.get_duration_hours(), 2)
         }
 
@@ -323,19 +328,20 @@ def agent_view():
         db.func.date(BreakRecord.start_time) == today
     ).order_by(BreakRecord.start_time.desc()).all()
     
-    # Get today's shift for this agent
-    today_shift = Shift.query.filter_by(
-        agent_id=current_user.id,
-        shift_date=today
+    # Get today's shift for this agent (shift that starts today or includes today)
+    today_shift = Shift.query.filter(
+        Shift.agent_id == current_user.id,
+        Shift.start_date <= today,
+        Shift.end_date >= today
     ).first()
     
-    # Get upcoming shifts (next 7 days)
+    # Get upcoming shifts (next 7 days) - shifts that start within next 7 days
     next_week = today + timedelta(days=7)
     upcoming_shifts = Shift.query.filter(
         Shift.agent_id == current_user.id,
-        Shift.shift_date >= today,
-        Shift.shift_date <= next_week
-    ).order_by(Shift.shift_date).all()
+        Shift.start_date >= today,
+        Shift.start_date <= next_week
+    ).order_by(Shift.start_date).all()
     
     # Get upcoming off days (next 7 days)
     upcoming_offdays = OffDay.query.filter(
@@ -461,8 +467,8 @@ def get_breaks():
     
     # Get all shifts that START on the requested date range
     shifts_in_range = Shift.query.filter(
-        Shift.shift_date >= start_date,
-        Shift.shift_date <= end_date
+        Shift.start_date >= start_date,
+        Shift.start_date <= end_date
     ).all()
     
     # Get agent IDs from shifts in range
@@ -548,10 +554,16 @@ def get_breaks():
     
     # Group breaks by shift period (not just calendar date)
     # For overnight shifts (e.g., 4pm-1am), breaks after midnight belong to the shift that started the previous day
-    # First, get all shifts for agents in the date range (extended range to catch overnight shifts)
+    # First, get all shifts that start or end in the date range (extended range to catch overnight shifts)
     all_shifts = Shift.query.filter(
-        Shift.shift_date >= extended_start_date,
-        Shift.shift_date <= extended_end_date
+        db.or_(
+            Shift.start_date >= extended_start_date,
+            Shift.end_date >= extended_start_date
+        ),
+        db.or_(
+            Shift.start_date <= extended_end_date,
+            Shift.end_date <= extended_end_date
+        )
     ).all()
     
     # Create a mapping: agent_id -> list of shifts
@@ -581,19 +593,18 @@ def get_breaks():
             # Find shift that matches this punch in date
             punch_in_date = punch_in.start_time.date()
             for shift in agent_shifts:
-                if shift.shift_date == punch_in_date:
+                if shift.start_date <= punch_in_date <= shift.end_date:
                     return shift
         
-        # If no punch in found, try to match by break time and shift date
+        # If no punch in found, try to match by break time and shift date range
         # For overnight shifts, break might be on next day but belong to previous day's shift
         break_date = break_time.date()
-        prev_date = break_date - timedelta(days=1)
         
         for shift in agent_shifts:
-            # Check if break is on shift date or next day (for overnight shifts)
-            if shift.shift_date == break_date or shift.shift_date == prev_date:
+            # Check if break date falls within shift date range
+            if shift.start_date <= break_date <= shift.end_date:
                 # Check if break time is within reasonable range (within 24 hours of shift start)
-                shift_start_datetime = datetime.combine(shift.shift_date, shift.start_time)
+                shift_start_datetime = datetime.combine(shift.start_date, shift.start_time)
                 time_diff = (break_time - shift_start_datetime).total_seconds() / 3600  # hours
                 if 0 <= time_diff <= 24:  # Within 24 hours of shift start
                     return shift
@@ -610,9 +621,9 @@ def get_breaks():
         
         # Filter: Only include if shift started in the requested date range
         if shift:
-            shift_date_str = shift.shift_date.strftime('%Y-%m-%d')
+            shift_start_date_str = shift.start_date.strftime('%Y-%m-%d')
             # Only include breaks from shifts that STARTED in the date range
-            if shift_date_str < start_date or shift_date_str > end_date:
+            if shift_start_date_str < start_date or shift_start_date_str > end_date:
                 continue  # Skip - shift didn't start in the requested date range
         else:
             # No shift found - only include if break date is in range (fallback)
@@ -632,8 +643,8 @@ def get_breaks():
         # Add shift date info to break dict for grouping
         break_dict = br.to_dict()
         if shift:
-            # Use shift date as the grouping key (even if break is on next day)
-            break_dict['shift_date'] = shift.shift_date.isoformat()
+            # Use shift start date as the grouping key (even if break is on next day)
+            break_dict['shift_date'] = shift.start_date.isoformat()
         else:
             # No shift found, use break's calendar date
             break_dict['shift_date'] = br.start_time.date().isoformat() if br.start_time else None
@@ -657,11 +668,9 @@ def get_breaks():
         agent_shifts = shifts_by_agent.get(br.agent_id, [])
         shift = None
         
-        # Try to find shift by punch date or previous day (for overnight)
-        prev_date = punch_date - timedelta(days=1)
-        
+        # Try to find shift by punch date (check if punch date falls within shift date range)
         for s in agent_shifts:
-            if s.shift_date == punch_date or s.shift_date == prev_date:
+            if s.start_date <= punch_date <= s.end_date:
                 shift = s
                 break
         
@@ -675,7 +684,7 @@ def get_breaks():
         elif shift:
             # Punch doesn't match date range, but check if it belongs to a shift that started in range
             # This is for overnight shifts where punch out happens on next day
-            shift_date_str = shift.shift_date.strftime('%Y-%m-%d')
+            shift_start_date_str = shift.start_date.strftime('%Y-%m-%d')
             if shift_date_str >= start_date and shift_date_str <= end_date:
                 # Only include punch OUT (not punch IN) from overnight shifts
                 # Punch IN should always show on the day it happened
@@ -1261,14 +1270,14 @@ def get_shifts():
     agent_id = request.args.get('agent_id', '')
     
     query = Shift.query.filter(
-        Shift.shift_date >= start_date,
-        Shift.shift_date <= end_date
+        Shift.start_date >= start_date,
+        Shift.start_date <= end_date
     )
     
     if agent_id:
         query = query.filter_by(agent_id=int(agent_id))
     
-    shifts = query.order_by(Shift.shift_date, Shift.start_time).all()
+    shifts = query.order_by(Shift.start_date, Shift.start_time).all()
     
     return jsonify({
         'shifts': [s.to_dict() for s in shifts],
@@ -1326,7 +1335,12 @@ def create_bulk_shifts():
             continue
         
         for shift_date in dates_to_create:
-            existing = Shift.query.filter_by(agent_id=agent_id, shift_date=shift_date).first()
+            # For bulk creation, end_date is same as start_date (single day shifts)
+            existing = Shift.query.filter_by(
+                agent_id=agent_id,
+                start_date=shift_date,
+                end_date=shift_date
+            ).first()
             if existing:
                 existing.start_time = start_time_obj
                 existing.end_time = end_time_obj
@@ -1334,8 +1348,9 @@ def create_bulk_shifts():
             else:
                 shift = Shift(
                     agent_id=agent_id,
-                    shift_date=shift_date,
+                    start_date=shift_date,
                     start_time=start_time_obj,
+                    end_date=shift_date,
                     end_time=end_time_obj,
                     created_by=current_user.id
                 )
@@ -1376,29 +1391,38 @@ def create_shift():
     
     data = request.json
     agent_id = data.get('agent_id')
-    shift_date_str = data.get('shift_date')
+    start_date_str = data.get('start_date')
     start_time_str = data.get('start_time')
+    end_date_str = data.get('end_date')
     end_time_str = data.get('end_time')
     
-    if not all([agent_id, shift_date_str, start_time_str, end_time_str]):
+    if not all([agent_id, start_date_str, start_time_str, end_date_str, end_time_str]):
         return jsonify({'error': 'All fields are required'}), 400
     
     try:
-        shift_date = datetime.strptime(shift_date_str, '%Y-%m-%d').date()
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
         start_time = datetime.strptime(start_time_str, '%H:%M').time()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
         end_time = datetime.strptime(end_time_str, '%H:%M').time()
     except ValueError:
         return jsonify({'error': 'Invalid date or time format'}), 400
     
-    # Check if shift already exists for this agent on this date
+    # Validate that end date/time is after start date/time
+    start_datetime = datetime.combine(start_date, start_time)
+    end_datetime = datetime.combine(end_date, end_time)
+    if end_datetime <= start_datetime:
+        return jsonify({'error': 'End date/time must be after start date/time'}), 400
+    
+    # Check if shift already exists for this agent with same start date/time
     existing = Shift.query.filter_by(
         agent_id=agent_id,
-        shift_date=shift_date
+        start_date=start_date,
+        start_time=start_time
     ).first()
     
     if existing:
         # Update existing shift
-        existing.start_time = start_time
+        existing.end_date = end_date
         existing.end_time = end_time
         existing.created_by = current_user.id
         db.session.commit()
@@ -1411,8 +1435,9 @@ def create_shift():
     # Create new shift
     shift = Shift(
         agent_id=agent_id,
-        shift_date=shift_date,
+        start_date=start_date,
         start_time=start_time,
+        end_date=end_date,
         end_time=end_time,
         created_by=current_user.id
     )
@@ -1436,10 +1461,12 @@ def update_shift(shift_id):
     shift = Shift.query.get_or_404(shift_id)
     data = request.json
     
-    if 'shift_date' in data:
-        shift.shift_date = datetime.strptime(data['shift_date'], '%Y-%m-%d').date()
+    if 'start_date' in data:
+        shift.start_date = datetime.strptime(data['start_date'], '%Y-%m-%d').date()
     if 'start_time' in data:
         shift.start_time = datetime.strptime(data['start_time'], '%H:%M').time()
+    if 'end_date' in data:
+        shift.end_date = datetime.strptime(data['end_date'], '%Y-%m-%d').date()
     if 'end_time' in data:
         shift.end_time = datetime.strptime(data['end_time'], '%H:%M').time()
     
@@ -1590,11 +1617,11 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         db.func.date(BreakRecord.start_time) <= end_date
     ).all()
     
-    # Get all shifts for this agent in date range
+    # Get all shifts for this agent in date range (shifts that start in the range)
     shifts = Shift.query.filter(
         Shift.agent_id == agent_id,
-        Shift.shift_date >= datetime.strptime(start_date, '%Y-%m-%d').date(),
-        Shift.shift_date <= datetime.strptime(end_date, '%Y-%m-%d').date()
+        Shift.start_date >= datetime.strptime(start_date, '%Y-%m-%d').date(),
+        Shift.start_date <= datetime.strptime(end_date, '%Y-%m-%d').date()
     ).all()
     
     # Calculate metrics
@@ -1670,8 +1697,8 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
                     adherence_scores.append(break_adherence)
     
     # 2. Punch in/out adherence based on shift times
-    # Group shifts by date for easier lookup
-    shifts_by_date = {s.shift_date: s for s in shifts}
+    # Group shifts by start date for easier lookup
+    shifts_by_date = {s.start_date: s for s in shifts}
     
     # Group punch in/out by date
     punch_records_by_date = {}
@@ -1683,8 +1710,8 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
             punch_records_by_date[punch_date][b.break_type] = b
     
     # Calculate punch in/out adherence for each day with a shift
-    for shift_date, shift in shifts_by_date.items():
-        punch_records = punch_records_by_date.get(shift_date, {})
+    for shift_start_date, shift in shifts_by_date.items():
+        punch_records = punch_records_by_date.get(shift_start_date, {})
         
         # Punch in adherence
         if 'punch_in' in punch_records:
@@ -1693,8 +1720,8 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
             shift_start_time = shift.start_time
             
             # Calculate difference in minutes
-            punch_in_datetime = datetime.combine(shift_date, punch_in_time)
-            shift_start_datetime = datetime.combine(shift_date, shift_start_time)
+            punch_in_datetime = datetime.combine(shift_start_date, punch_in_time)
+            shift_start_datetime = datetime.combine(shift.start_date, shift_start_time)
             
             # Allow 5 minutes grace period (early or late)
             time_diff_minutes = abs((punch_in_datetime - shift_start_datetime).total_seconds() / 60)
@@ -1718,12 +1745,8 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
             shift_end_time = shift.end_time
             
             # Calculate difference in minutes
-            punch_out_datetime = datetime.combine(shift_date, punch_out_time)
-            shift_end_datetime = datetime.combine(shift_date, shift_end_time)
-            
-            # Handle overnight shifts
-            if shift_end_time < shift.start_time:
-                shift_end_datetime += timedelta(days=1)
+            punch_out_datetime = datetime.combine(punch_out.start_time.date(), punch_out_time)
+            shift_end_datetime = datetime.combine(shift.end_date, shift_end_time)
             
             # Allow 5 minutes grace period (early or late)
             time_diff_minutes = abs((punch_out_datetime - shift_end_datetime).total_seconds() / 60)
