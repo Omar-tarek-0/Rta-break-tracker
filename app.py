@@ -620,29 +620,29 @@ def start_break():
                 'error': 'You must punch in first before taking any breaks. Please punch in to continue.'
             }), 400
         
-        # Check if already punched out
+        # Check if already punched out (today or within last 24 hours, and after punch in)
         punch_out = BreakRecord.query.filter(
             BreakRecord.agent_id == current_user.id,
             BreakRecord.break_type == 'punch_out',
             db.func.date(BreakRecord.start_time) == today
         ).first()
         
-        if punch_out:
-            return jsonify({
-                'error': 'You have already punched out for the day. Breaks are no longer available.'
-            }), 400
+        # If no punch out today, check within last 24 hours
+        if not punch_out:
+            twenty_four_hours_ago = now - timedelta(hours=24)
+            punch_out = BreakRecord.query.filter(
+                BreakRecord.agent_id == current_user.id,
+                BreakRecord.break_type == 'punch_out',
+                BreakRecord.start_time >= twenty_four_hours_ago,
+                BreakRecord.start_time <= now
+            ).order_by(BreakRecord.start_time.desc()).first()
         
-        # Check if already punched out
-        punch_out = BreakRecord.query.filter(
-            BreakRecord.agent_id == current_user.id,
-            BreakRecord.break_type == 'punch_out',
-            db.func.date(BreakRecord.start_time) == today
-        ).first()
-        
-        if punch_out:
-            return jsonify({
-                'error': 'You have already punched out for the day. Breaks are no longer available.'
-            }), 400
+        # If punched out, check if it's after the punch in
+        if punch_out and punch_in:
+            if punch_out.start_time > punch_in.start_time:
+                return jsonify({
+                    'error': 'You have already punched out for the day. Breaks are no longer available.'
+                }), 400
     
     if not screenshot:
         return jsonify({'error': 'Screenshot is required'}), 400
