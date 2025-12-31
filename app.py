@@ -478,27 +478,34 @@ def dashboard():
 @login_required
 def get_breaks():
     """Get breaks for dashboard"""
-    if not current_user.is_rtm():
-        return jsonify({'error': 'Unauthorized'}), 403
-    
-    # Get filter parameters
-    start_date = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
-    end_date = request.args.get('end_date', start_date)
-    agent_id = request.args.get('agent_id', '')
-    break_type = request.args.get('break_type', '')
-    
-    # Build query for regular breaks
-    # IMPORTANT: Filter by shift start date, not break date
-    # If filtering for Dec 30, show all records from shifts that STARTED on Dec 30
-    # This includes breaks/punches that happened on Dec 31 if the shift started Dec 30
-    extended_start_date = (datetime.strptime(start_date, '%Y-%m-%d').date() - timedelta(days=1)).strftime('%Y-%m-%d')
-    extended_end_date = (datetime.strptime(end_date, '%Y-%m-%d').date() + timedelta(days=1)).strftime('%Y-%m-%d')
-    
-    # Get all shifts that START on the requested date range
-    shifts_in_range = Shift.query.filter(
-        Shift.start_date >= start_date,
-        Shift.start_date <= end_date
-    ).all()
+    try:
+        if not current_user.is_rtm():
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        # Get filter parameters
+        start_date = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
+        end_date = request.args.get('end_date', start_date)
+        agent_id = request.args.get('agent_id', '')
+        break_type = request.args.get('break_type', '')
+        
+        # Build query for regular breaks
+        # IMPORTANT: Filter by shift start date, not break date
+        # If filtering for Dec 30, show all records from shifts that STARTED on Dec 30
+        # This includes breaks/punches that happened on Dec 31 if the shift started Dec 30
+        extended_start_date = (datetime.strptime(start_date, '%Y-%m-%d').date() - timedelta(days=1)).strftime('%Y-%m-%d')
+        extended_end_date = (datetime.strptime(end_date, '%Y-%m-%d').date() + timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        # Get all shifts that START on the requested date range
+        # Wrap in try/except in case database schema hasn't been updated
+        try:
+            shifts_in_range = Shift.query.filter(
+                Shift.start_date >= start_date,
+                Shift.start_date <= end_date
+            ).all()
+        except Exception as shift_error:
+            # If start_date column doesn't exist, return empty list
+            print(f"Warning: Could not query shifts by start_date: {shift_error}")
+            shifts_in_range = []
     
     # Get agent IDs from shifts in range
     agent_ids_in_range = {s.agent_id for s in shifts_in_range}
