@@ -595,35 +595,45 @@ def get_breaks():
         agents_data[br.agent_id]['breaks'].append(break_dict)
     
     # Group attendance records by agent and pair punch in/out together
-    # Filter attendance records: only show those from shifts that STARTED in the date range
+    # Show attendance records that:
+    # 1. Belong to shifts that STARTED in the date range, OR
+    # 2. Have punch date in the date range (for agents without shifts or manual entries)
     filtered_attendance = []
     for br in attendance_records:
+        if not br.start_time:
+            continue
+        
+        punch_date = br.start_time.date()
+        punch_date_str = punch_date.strftime('%Y-%m-%d')
+        
         # Find the shift this punch belongs to
         agent_shifts = shifts_by_agent.get(br.agent_id, [])
         shift = None
         
-        if br.start_time:
-            # Try to find shift by punch date or previous day (for overnight)
-            punch_date = br.start_time.date()
-            prev_date = punch_date - timedelta(days=1)
-            
-            for s in agent_shifts:
-                if s.shift_date == punch_date or s.shift_date == prev_date:
-                    shift = s
-                    break
+        # Try to find shift by punch date or previous day (for overnight)
+        prev_date = punch_date - timedelta(days=1)
         
-        # Only include if shift started in the requested date range
+        for s in agent_shifts:
+            if s.shift_date == punch_date or s.shift_date == prev_date:
+                shift = s
+                break
+        
+        # Include if:
+        # 1. Shift started in the requested date range, OR
+        # 2. Punch date is in the requested date range (for agents without shifts)
+        should_include = False
+        
         if shift:
             shift_date_str = shift.shift_date.strftime('%Y-%m-%d')
             if shift_date_str >= start_date and shift_date_str <= end_date:
-                filtered_attendance.append(br)
+                should_include = True
         else:
-            # No shift found - include if punch date is in range (fallback)
-            punch_date = br.start_time.date() if br.start_time else None
-            if punch_date:
-                punch_date_str = punch_date.strftime('%Y-%m-%d')
-                if punch_date_str >= start_date and punch_date_str <= end_date:
-                    filtered_attendance.append(br)
+            # No shift found - include if punch date is in range
+            if punch_date_str >= start_date and punch_date_str <= end_date:
+                should_include = True
+        
+        if should_include:
+            filtered_attendance.append(br)
     
     attendance_records = filtered_attendance
     
