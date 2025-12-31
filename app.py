@@ -648,10 +648,13 @@ def get_breaks():
         agent_attendance[br.agent_id].append(br)
     
     # Pair punch in with punch out for each agent
+    # IMPORTANT: Initialize agents_data for agents that only have punches (no breaks)
     for agent_id, records in agent_attendance.items():
         if agent_id not in agents_data:
+            # Get agent name from first record
+            agent_name = records[0].agent.full_name if records else 'Unknown'
             agents_data[agent_id] = {
-                'agent_name': records[0].agent.full_name,
+                'agent_name': agent_name,
                 'breaks': [],
                 'attendance': []
             }
