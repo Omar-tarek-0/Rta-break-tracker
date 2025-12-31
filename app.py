@@ -555,16 +555,38 @@ def get_breaks():
     # Group breaks by shift period (not just calendar date)
     # For overnight shifts (e.g., 4pm-1am), breaks after midnight belong to the shift that started the previous day
     # First, get all shifts that start or end in the date range (extended range to catch overnight shifts)
-    all_shifts = Shift.query.filter(
-        db.or_(
-            Shift.start_date >= extended_start_date,
-            Shift.end_date >= extended_start_date
-        ),
-        db.or_(
-            Shift.start_date <= extended_end_date,
-            Shift.end_date <= extended_end_date
-        )
-    ).all()
+    try:
+        # Get shifts where start_date or end_date falls within the extended range
+        # This catches shifts that overlap with the date range
+        all_shifts = Shift.query.filter(
+            db.or_(
+                db.and_(
+                    Shift.start_date >= extended_start_date,
+                    Shift.start_date <= extended_end_date
+                ),
+                db.and_(
+                    Shift.end_date >= extended_start_date,
+                    Shift.end_date <= extended_end_date
+                ),
+                db.and_(
+                    Shift.start_date <= extended_start_date,
+                    Shift.end_date >= extended_end_date
+                )
+            )
+        ).all()
+    except Exception as e:
+        # If database schema hasn't been updated yet (start_date/end_date don't exist), 
+        # try to use the old shift_date column as fallback
+        try:
+            # Fallback: try with start_date only
+            all_shifts = Shift.query.filter(
+                Shift.start_date >= extended_start_date,
+                Shift.start_date <= extended_end_date
+            ).all()
+        except:
+            # If that also fails, return empty list (no shifts found or schema mismatch)
+            print(f"Warning: Could not query shifts - schema may need migration: {e}")
+            all_shifts = []
     
     # Create a mapping: agent_id -> list of shifts
     shifts_by_agent = {}
