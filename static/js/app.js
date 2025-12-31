@@ -969,44 +969,99 @@ async function loadSchedules() {
         const shiftsData = await shiftsResponse.json();
         const offdaysData = await offdaysResponse.json();
         
-        if (data.error) {
-            container.innerHTML = `<div class="error-message">${data.error}</div>`;
+        if (shiftsData.error) {
+            container.innerHTML = `<div class="error-message">${shiftsData.error}</div>`;
             return;
         }
         
-        if (data.shifts.length === 0) {
-            container.innerHTML = '<div class="empty-message">No schedules found for the selected date range</div>';
+        if (offdaysData.error) {
+            container.innerHTML = `<div class="error-message">${offdaysData.error}</div>`;
             return;
         }
         
-        // Group by agent
-        const agentSchedules = {};
-        data.shifts.forEach(shift => {
-            if (!agentSchedules[shift.agent_name]) {
-                agentSchedules[shift.agent_name] = [];
-            }
-            agentSchedules[shift.agent_name].push(shift);
-        });
-        
-        let html = '<div style="display: flex; flex-direction: column; gap: 15px;">';
-        for (const [agentName, shifts] of Object.entries(agentSchedules)) {
-            html += `
-                <div style="background: var(--surface-light); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">
-                    <h4 style="margin: 0 0 10px 0; color: var(--text);">👤 ${agentName}</h4>
-                    <div style="display: flex; flex-direction: column; gap: 5px;">
-            `;
-            shifts.forEach(shift => {
-                const date = new Date(shift.shift_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                html += `
-                    <div style="display: flex; justify-content: space-between; padding: 5px; background: var(--surface); border-radius: 4px;">
-                        <span>📅 ${date}</span>
-                        <span>🕐 ${shift.start_time} - ${shift.end_time}</span>
-                    </div>
-                `;
+        // Group shifts by agent
+        const shiftsByAgent = {};
+        if (shiftsData.shifts && shiftsData.shifts.length > 0) {
+            shiftsData.shifts.forEach(shift => {
+                if (!shiftsByAgent[shift.agent_id]) {
+                    shiftsByAgent[shift.agent_id] = {
+                        agent_name: shift.agent_name,
+                        shifts: []
+                    };
+                }
+                shiftsByAgent[shift.agent_id].shifts.push(shift);
             });
-            html += '</div></div>';
         }
-        html += '</div>';
+        
+        // Group off days by agent
+        const offdaysByAgent = {};
+        if (offdaysData.offdays && offdaysData.offdays.length > 0) {
+            offdaysData.offdays.forEach(offday => {
+                if (!offdaysByAgent[offday.agent_id]) {
+                    offdaysByAgent[offday.agent_id] = {
+                        agent_name: offday.agent_name,
+                        offdays: []
+                    };
+                }
+                offdaysByAgent[offday.agent_id].offdays.push(offday);
+            });
+        }
+        
+        // Combine all agents
+        const allAgentIds = new Set([
+            ...Object.keys(shiftsByAgent),
+            ...Object.keys(offdaysByAgent)
+        ]);
+        
+        if (allAgentIds.size === 0) {
+            container.innerHTML = '<div class="empty-message">No schedules or off days found for the selected date range</div>';
+            return;
+        }
+        
+        let html = '';
+        for (const agentId of allAgentIds) {
+            const agentName = shiftsByAgent[agentId]?.agent_name || offdaysByAgent[agentId]?.agent_name || 'Unknown';
+            html += `
+                <div style="margin-bottom: 20px; padding: 15px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
+                    <h4 style="margin: 0 0 10px 0; color: var(--text);">👤 ${agentName}</h4>
+            `;
+            
+            // Show shifts
+            if (shiftsByAgent[agentId] && shiftsByAgent[agentId].shifts.length > 0) {
+                html += '<div style="margin-bottom: 10px;"><strong>📅 Shifts:</strong></div>';
+                html += '<div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">';
+                shiftsByAgent[agentId].shifts.forEach(shift => {
+                    const shiftDate = new Date(shift.shift_date + 'T00:00:00');
+                    const dateStr = shiftDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    html += `
+                        <div style="padding: 8px; background: var(--surface-light); border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>📅 ${dateStr}: ${shift.start_time} - ${shift.end_time} (${shift.duration_hours}h)</span>
+                            <button class="btn btn-sm btn-danger" onclick="deleteShift(${shift.id})" style="padding: 4px 8px; font-size: 11px;">🗑️ Delete</button>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            // Show off days
+            if (offdaysByAgent[agentId] && offdaysByAgent[agentId].offdays.length > 0) {
+                html += '<div style="margin-bottom: 10px;"><strong>🏖️ Off Days:</strong></div>';
+                html += '<div style="display: flex; flex-direction: column; gap: 8px;">';
+                offdaysByAgent[agentId].offdays.forEach(offday => {
+                    const offDate = new Date(offday.off_date + 'T00:00:00');
+                    const dateStr = offDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    html += `
+                        <div style="padding: 8px; background: #fff3cd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>🏖️ ${dateStr}${offday.reason ? ': ' + offday.reason : ''}</span>
+                            <button class="btn btn-sm btn-danger" onclick="deleteOffDay(${offday.id})" style="padding: 4px 8px; font-size: 11px;">🗑️ Delete</button>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            html += '</div>';
+        }
         
         container.innerHTML = html;
     } catch (err) {
