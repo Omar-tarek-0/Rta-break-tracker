@@ -623,10 +623,15 @@ body {
 
 .agent-breaks {
     display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 15px;
+}
+
+.shift-breaks-group {
+    display: flex;
     flex-wrap: wrap;
     gap: 12px;
-    padding: 15px;
-    overflow-x: auto;
 }
 
 /* ==================== BREAK MINI CARD ==================== */
