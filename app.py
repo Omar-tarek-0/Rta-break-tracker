@@ -1067,15 +1067,40 @@ def uploaded_file(filename):
     """Serve uploaded files"""
     try:
         # Handle nested paths (e.g., "2025-12-31/abc123.jpg")
+        # Also handle old format where filename might not have date folder
         file_path = Path(app.config['UPLOAD_FOLDER']) / filename
-        if file_path.exists() and file_path.is_file():
-            return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+        
+        # If file doesn't exist with nested path, try looking in date folders
+        if not file_path.exists() or not file_path.is_file():
+            # Check if it's just a filename without date folder
+            if '/' not in filename:
+                # Try to find it in any date folder (for backwards compatibility)
+                upload_folder = Path(app.config['UPLOAD_FOLDER'])
+                for date_folder in upload_folder.iterdir():
+                    if date_folder.is_dir():
+                        potential_path = date_folder / filename
+                        if potential_path.exists() and potential_path.is_file():
+                            return send_from_directory(str(date_folder), filename)
+            
+            # File not found - return 404 with proper image response
+            from flask import abort
+            abort(404)
+        
+        # File exists - serve it
+        # Extract directory and filename for send_from_directory
+        if '/' in filename:
+            directory = Path(app.config['UPLOAD_FOLDER']) / filename.rsplit('/', 1)[0]
+            file_only = filename.rsplit('/', 1)[1]
+            return send_from_directory(str(directory), file_only)
         else:
-            # File not found - return 404
-            return jsonify({'error': 'File not found'}), 404
+            return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+            
     except Exception as e:
-        # Log error but don't expose details to client
-        return jsonify({'error': 'Error serving file'}), 500
+        # Log error for debugging
+        import logging
+        logging.error(f"Error serving file {filename}: {str(e)}")
+        from flask import abort
+        abort(404)
 
 
 # ==================== SHIFT MANAGEMENT API ====================
