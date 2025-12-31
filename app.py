@@ -109,6 +109,28 @@ class Shift(db.Model):
         }
 
 
+class OffDay(db.Model):
+    """Off day model for tracking agent days off"""
+    id = db.Column(db.Integer, primary_key=True)
+    agent_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    off_date = db.Column(db.Date, nullable=False)
+    reason = db.Column(db.String(255), default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'))
+    
+    agent = db.relationship('User', foreign_keys=[agent_id], backref='off_days')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'agent_id': self.agent_id,
+            'agent_name': self.agent.full_name if self.agent else 'Unknown',
+            'off_date': self.off_date.isoformat(),
+            'reason': self.reason,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
 class BreakRecord(db.Model):
     """Break record model"""
     id = db.Column(db.Integer, primary_key=True)
@@ -307,6 +329,27 @@ def agent_view():
         shift_date=today
     ).first()
     
+    # Get upcoming shifts (next 7 days)
+    next_week = today + timedelta(days=7)
+    upcoming_shifts = Shift.query.filter(
+        Shift.agent_id == current_user.id,
+        Shift.shift_date >= today,
+        Shift.shift_date <= next_week
+    ).order_by(Shift.shift_date).all()
+    
+    # Get upcoming off days (next 7 days)
+    upcoming_offdays = OffDay.query.filter(
+        OffDay.agent_id == current_user.id,
+        OffDay.off_date >= today,
+        OffDay.off_date <= next_week
+    ).order_by(OffDay.off_date).all()
+    
+    # Check if today is an off day
+    is_off_day = OffDay.query.filter_by(
+        agent_id=current_user.id,
+        off_date=today
+    ).first() is not None
+    
     # Check punch in/out status for today
     punch_in = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
@@ -336,6 +379,9 @@ def agent_view():
         active_break=active_break,
         today_breaks=today_breaks,
         today_shift=today_shift,
+        upcoming_shifts=upcoming_shifts,
+        upcoming_offdays=upcoming_offdays,
+        is_off_day=is_off_day,
         punch_status=punch_status,
         punch_in_time=punch_in.start_time if punch_in else None,
         punch_out_time=punch_out.start_time if punch_out else None,
@@ -1319,6 +1365,217 @@ def delete_shift(shift_id):
     db.session.commit()
     
     return jsonify({'success': True, 'message': 'Shift deleted'})
+
+
+@app.route('/api/shift', methods=['POST'])
+@login_required
+def create_shift():
+    """Create a single shift for an agent"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.json
+    agent_id = data.get('agent_id')
+    shift_date_str = data.get('shift_date')
+    start_time_str = data.get('start_time')
+    end_time_str = data.get('end_time')
+    
+    if not all([agent_id, shift_date_str, start_time_str, end_time_str]):
+        return jsonify({'error': 'All fields are required'}), 400
+    
+    try:
+        shift_date = datetime.strptime(shift_date_str, '%Y-%m-%d').date()
+        start_time = datetime.strptime(start_time_str, '%H:%M').time()
+        end_time = datetime.strptime(end_time_str, '%H:%M').time()
+    except ValueError:
+        return jsonify({'error': 'Invalid date or time format'}), 400
+    
+    # Check if shift already exists for this agent on this date
+    existing = Shift.query.filter_by(
+        agent_id=agent_id,
+        shift_date=shift_date
+    ).first()
+    
+    if existing:
+        # Update existing shift
+        existing.start_time = start_time
+        existing.end_time = end_time
+        existing.created_by = current_user.id
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': 'Shift updated',
+            'shift': existing.to_dict()
+        })
+    
+    # Create new shift
+    shift = Shift(
+        agent_id=agent_id,
+        shift_date=shift_date,
+        start_time=start_time,
+        end_time=end_time,
+        created_by=current_user.id
+    )
+    db.session.add(shift)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Shift created',
+        'shift': shift.to_dict()
+    })
+
+
+@app.route('/api/shift/<int:shift_id>', methods=['PUT'])
+@login_required
+def update_shift(shift_id):
+    """Update an existing shift"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    shift = Shift.query.get_or_404(shift_id)
+    data = request.json
+    
+    if 'shift_date' in data:
+        shift.shift_date = datetime.strptime(data['shift_date'], '%Y-%m-%d').date()
+    if 'start_time' in data:
+        shift.start_time = datetime.strptime(data['start_time'], '%H:%M').time()
+    if 'end_time' in data:
+        shift.end_time = datetime.strptime(data['end_time'], '%H:%M').time()
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Shift updated',
+        'shift': shift.to_dict()
+    })
+
+
+# ==================== OFF DAYS MANAGEMENT ====================
+
+@app.route('/api/offdays', methods=['GET'])
+@login_required
+def get_offdays():
+    """Get off days for agents"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    agent_id = request.args.get('agent_id', type=int)
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    query = OffDay.query
+    
+    if agent_id:
+        query = query.filter_by(agent_id=agent_id)
+    
+    if start_date and end_date:
+        try:
+            start = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end = datetime.strptime(end_date, '%Y-%m-%d').date()
+            query = query.filter(OffDay.off_date >= start, OffDay.off_date <= end)
+        except ValueError:
+            return jsonify({'error': 'Invalid date format'}), 400
+    
+    offdays = query.order_by(OffDay.off_date.desc()).all()
+    
+    return jsonify({
+        'offdays': [od.to_dict() for od in offdays],
+        'total': len(offdays)
+    })
+
+
+@app.route('/api/offday', methods=['POST'])
+@login_required
+def create_offday():
+    """Create an off day for an agent"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.json
+    agent_id = data.get('agent_id')
+    off_date_str = data.get('off_date')
+    reason = data.get('reason', '')
+    
+    if not all([agent_id, off_date_str]):
+        return jsonify({'error': 'Agent ID and date are required'}), 400
+    
+    try:
+        off_date = datetime.strptime(off_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
+    
+    # Check if off day already exists
+    existing = OffDay.query.filter_by(
+        agent_id=agent_id,
+        off_date=off_date
+    ).first()
+    
+    if existing:
+        # Update existing off day
+        existing.reason = reason
+        existing.created_by = current_user.id
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': 'Off day updated',
+            'offday': existing.to_dict()
+        })
+    
+    # Create new off day
+    offday = OffDay(
+        agent_id=agent_id,
+        off_date=off_date,
+        reason=reason,
+        created_by=current_user.id
+    )
+    db.session.add(offday)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Off day created',
+        'offday': offday.to_dict()
+    })
+
+
+@app.route('/api/offday/<int:offday_id>', methods=['PUT'])
+@login_required
+def update_offday(offday_id):
+    """Update an existing off day"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    offday = OffDay.query.get_or_404(offday_id)
+    data = request.json
+    
+    if 'off_date' in data:
+        offday.off_date = datetime.strptime(data['off_date'], '%Y-%m-%d').date()
+    if 'reason' in data:
+        offday.reason = data['reason']
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Off day updated',
+        'offday': offday.to_dict()
+    })
+
+
+@app.route('/api/offday/<int:offday_id>', methods=['DELETE'])
+@login_required
+def delete_offday(offday_id):
+    """Delete an off day"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    offday = OffDay.query.get_or_404(offday_id)
+    db.session.delete(offday)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Off day deleted'})
 
 
 # ==================== REPORTING & EXPORT ====================

@@ -95,6 +95,8 @@
             <div class="filter-section">
                 <h4>📅 Schedule Management</h4>
                 <button class="btn btn-primary btn-block" onclick="showSchedulesModal()">📋 View All Schedules</button>
+                <button class="btn btn-success btn-block" onclick="showAddShiftModal()">➕ Add Shift</button>
+                <button class="btn btn-warning btn-block" onclick="showAddOffDayModal()">🏖️ Add Off Day</button>
             </div>
             
             <hr class="divider">
@@ -340,6 +342,76 @@
         <div class="modal-footer">
             <button class="btn" onclick="hideManualBreakModal()">Cancel</button>
             <button class="btn btn-primary" onclick="submitManualBreak()">✅ Create Break</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Shift Modal -->
+<div id="addShiftModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>➕ Add Shift</h3>
+            <button class="modal-close" onclick="hideAddShiftModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>👤 Agent</label>
+                <select id="shiftAgent" class="form-select">
+                    <option value="">Select Agent</option>
+                    {% for agent in agents %}
+                    <option value="{{ agent.id }}">{{ agent.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>📅 Shift Date</label>
+                <input type="date" id="shiftDate" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>⏰ Start Time</label>
+                <input type="time" id="shiftStartTime" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>⏰ End Time</label>
+                <input type="time" id="shiftEndTime" class="form-input">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="hideAddShiftModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="submitShift()">Save Shift</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Off Day Modal -->
+<div id="addOffDayModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>🏖️ Add Off Day</h3>
+            <button class="modal-close" onclick="hideAddOffDayModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>👤 Agent</label>
+                <select id="offDayAgent" class="form-select">
+                    <option value="">Select Agent</option>
+                    {% for agent in agents %}
+                    <option value="{{ agent.id }}">{{ agent.full_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>📅 Off Date</label>
+                <input type="date" id="offDayDate" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>📝 Reason (Optional)</label>
+                <input type="text" id="offDayReason" class="form-input" placeholder="e.g., Vacation, Sick Leave, etc.">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="hideAddOffDayModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="submitOffDay()">Save Off Day</button>
         </div>
     </div>
 </div>

@@ -961,8 +961,13 @@ async function loadSchedules() {
     container.innerHTML = '<div class="loading">Loading schedules...</div>';
     
     try {
-        const response = await fetch(`/api/shifts?start_date=${startDate}&end_date=${endDate}`);
-        const data = await response.json();
+        const [shiftsResponse, offdaysResponse] = await Promise.all([
+            fetch(`/api/shifts?start_date=${startDate}&end_date=${endDate}`),
+            fetch(`/api/offdays?start_date=${startDate}&end_date=${endDate}`)
+        ]);
+        
+        const shiftsData = await shiftsResponse.json();
+        const offdaysData = await offdaysResponse.json();
         
         if (data.error) {
             container.innerHTML = `<div class="error-message">${data.error}</div>`;
@@ -1006,6 +1011,52 @@ async function loadSchedules() {
         container.innerHTML = html;
     } catch (err) {
         container.innerHTML = `<div class="error-message">Error loading schedules: ${err.message}</div>`;
+    }
+}
+
+async function deleteShift(shiftId) {
+    if (!confirm('Are you sure you want to delete this shift?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/shift/${shiftId}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Shift deleted successfully!');
+            loadSchedules(); // Refresh the list
+        } else {
+            alert(data.error || 'Failed to delete shift');
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    }
+}
+
+async function deleteOffDay(offdayId) {
+    if (!confirm('Are you sure you want to delete this off day?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/offday/${offdayId}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Off day deleted successfully!');
+            loadSchedules(); // Refresh the list
+        } else {
+            alert(data.error || 'Failed to delete off day');
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
     }
 }
 
@@ -1097,16 +1148,132 @@ async function submitManualBreak() {
     }
 }
 
+// ==================== SHIFT MANAGEMENT ====================
+
+function showAddShiftModal() {
+    document.getElementById('addShiftModal').style.display = 'flex';
+    // Set default date to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('shiftDate').value = today;
+    // Clear previous values
+    document.getElementById('shiftAgent').value = '';
+    document.getElementById('shiftStartTime').value = '';
+    document.getElementById('shiftEndTime').value = '';
+}
+
+function hideAddShiftModal() {
+    document.getElementById('addShiftModal').style.display = 'none';
+}
+
+async function submitShift() {
+    const agentId = document.getElementById('shiftAgent').value;
+    const shiftDate = document.getElementById('shiftDate').value;
+    const startTime = document.getElementById('shiftStartTime').value;
+    const endTime = document.getElementById('shiftEndTime').value;
+    
+    if (!agentId || !shiftDate || !startTime || !endTime) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/shift', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                agent_id: parseInt(agentId),
+                shift_date: shiftDate,
+                start_time: startTime,
+                end_time: endTime
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(data.message || 'Shift created successfully!');
+            hideAddShiftModal();
+            loadSchedules(); // Refresh schedules if modal is open
+        } else {
+            alert(data.error || 'Failed to create shift');
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    }
+}
+
+// ==================== OFF DAY MANAGEMENT ====================
+
+function showAddOffDayModal() {
+    document.getElementById('addOffDayModal').style.display = 'flex';
+    // Set default date to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('offDayDate').value = today;
+    // Clear previous values
+    document.getElementById('offDayAgent').value = '';
+    document.getElementById('offDayReason').value = '';
+}
+
+function hideAddOffDayModal() {
+    document.getElementById('addOffDayModal').style.display = 'none';
+}
+
+async function submitOffDay() {
+    const agentId = document.getElementById('offDayAgent').value;
+    const offDate = document.getElementById('offDayDate').value;
+    const reason = document.getElementById('offDayReason').value;
+    
+    if (!agentId || !offDate) {
+        alert('Please fill in Agent and Date fields');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/offday', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                agent_id: parseInt(agentId),
+                off_date: offDate,
+                reason: reason || ''
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(data.message || 'Off day created successfully!');
+            hideAddOffDayModal();
+        } else {
+            alert(data.error || 'Failed to create off day');
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    }
+}
+
 // Close modals when clicking outside
 window.onclick = function(event) {
     const schedulesModal = document.getElementById('schedulesModal');
     const manualBreakModal = document.getElementById('manualBreakModal');
+    const addShiftModal = document.getElementById('addShiftModal');
+    const addOffDayModal = document.getElementById('addOffDayModal');
     
     if (event.target === schedulesModal) {
         hideSchedulesModal();
     }
     if (event.target === manualBreakModal) {
         hideManualBreakModal();
+    }
+    if (event.target === addShiftModal) {
+        hideAddShiftModal();
+    }
+    if (event.target === addOffDayModal) {
+        hideAddOffDayModal();
     }
 }
 
