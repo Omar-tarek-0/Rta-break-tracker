@@ -981,7 +981,17 @@ def create_agent():
 @login_required
 def uploaded_file(filename):
     """Serve uploaded files"""
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    try:
+        # Handle nested paths (e.g., "2025-12-31/abc123.jpg")
+        file_path = Path(app.config['UPLOAD_FOLDER']) / filename
+        if file_path.exists() and file_path.is_file():
+            return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+        else:
+            # File not found - return 404
+            return jsonify({'error': 'File not found'}), 404
+    except Exception as e:
+        # Log error but don't expose details to client
+        return jsonify({'error': 'Error serving file'}), 500
 
 
 # ==================== SHIFT MANAGEMENT API ====================

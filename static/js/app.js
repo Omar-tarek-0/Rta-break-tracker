@@ -603,7 +603,13 @@ async function createAgent() {
 }
 
 function showImage(src, title) {
-    document.getElementById('modalImage').src = src;
+    const img = document.getElementById('modalImage');
+    img.src = src;
+    img.onerror = function() {
+        console.error('Failed to load image:', src);
+        img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5JbWFnZSBub3QgZm91bmQ8L3RleHQ+PC9zdmc+';
+        img.alt = 'Image not found';
+    };
     document.getElementById('imageModalTitle').textContent = title;
     document.getElementById('imageModal').style.display = 'flex';
 }
