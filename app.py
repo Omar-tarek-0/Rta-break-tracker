@@ -825,11 +825,22 @@ def get_breaks():
                     'notes': current.notes or ''
                 })
                 i += 1
-    
-    return jsonify({
-        'agents': list(agents_data.values()),
-        'total_breaks': len(regular_breaks)  # Only count regular breaks
-    })
+        
+        return jsonify({
+            'agents': list(agents_data.values()),
+            'total_breaks': len(regular_breaks)  # Only count regular breaks
+        })
+    except Exception as e:
+        # Log the error for debugging
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error in get_breaks: {e}")
+        print(error_trace)
+        # Return a proper JSON error response
+        return jsonify({
+            'error': f'Failed to load breaks: {str(e)}',
+            'details': str(e) if DEBUG else 'Internal server error'
+        }), 500
 
 
 @app.route('/api/break/start', methods=['POST'])
