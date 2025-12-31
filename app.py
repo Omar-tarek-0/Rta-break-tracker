@@ -792,31 +792,10 @@ def start_break():
                     BreakRecord.start_time <= now
                 ).order_by(BreakRecord.start_time.desc()).first()
             
-            # If punch in found, check if there's a shift that started on punch in date
-            # and if we're still within that shift period (for overnight shifts)
-            if punch_in and punch_in.start_time:
-                punch_in_date = punch_in.start_time.date()
-                # Check if there's a shift that started on punch in date
-                shift = Shift.query.filter_by(
-                    agent_id=current_user.id,
-                    shift_date=punch_in_date
-                ).first()
-                
-                if shift:
-                    # Calculate shift end time (could be next day for overnight shifts)
-                    shift_start_datetime = datetime.combine(shift.shift_date, shift.start_time)
-                    shift_end_datetime = datetime.combine(shift.shift_date, shift.end_time)
-                    # If end time is before start time, it's an overnight shift (next day)
-                    if shift.end_time < shift.start_time:
-                        shift_end_datetime += timedelta(days=1)
-                    
-                    # Check if current time is still within shift period
-                    if now <= shift_end_datetime:
-                        # Still in shift period - punch in is valid, allow break
-                        pass
-                    else:
-                        # Shift period ended - need new punch in
-                        punch_in = None
+            # IMPORTANT: If punch_in exists, allow breaks regardless of shift period
+            # The shift period check was too strict - as long as there's a punch_in and no punch_out,
+            # the agent should be able to take breaks
+            # Shift period is only used for determining if we need to look in last 24 hours (overnight shifts)
             
             if not punch_in:
                 return jsonify({
