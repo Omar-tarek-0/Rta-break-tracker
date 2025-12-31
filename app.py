@@ -598,6 +598,7 @@ def get_breaks():
     # Show attendance records that:
     # 1. Belong to shifts that STARTED in the date range, OR
     # 2. Have punch date in the date range (for agents without shifts or manual entries)
+    # IMPORTANT: Always show punches in the date range, even if no shift is assigned
     filtered_attendance = []
     for br in attendance_records:
         if not br.start_time:
@@ -619,17 +620,17 @@ def get_breaks():
                 break
         
         # Include if:
-        # 1. Shift started in the requested date range, OR
-        # 2. Punch date is in the requested date range (for agents without shifts)
+        # 1. Shift started in the requested date range (for overnight shifts), OR
+        # 2. Punch date is in the requested date range (for all punches, including manual ones)
         should_include = False
         
-        if shift:
+        # First check: Is punch date in the requested date range?
+        if punch_date_str >= start_date and punch_date_str <= end_date:
+            should_include = True
+        # Second check: Does it belong to a shift that started in the date range? (for overnight shifts)
+        elif shift:
             shift_date_str = shift.shift_date.strftime('%Y-%m-%d')
             if shift_date_str >= start_date and shift_date_str <= end_date:
-                should_include = True
-        else:
-            # No shift found - include if punch date is in range
-            if punch_date_str >= start_date and punch_date_str <= end_date:
                 should_include = True
         
         if should_include:
