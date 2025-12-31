@@ -407,10 +407,22 @@ def get_breaks():
     break_type = request.args.get('break_type', '')
     
     # Build query for regular breaks
-    # Extend date range to catch breaks from overnight shifts (e.g., break on Dec 31 12:04 AM belongs to Dec 30 shift)
+    # IMPORTANT: Filter by shift start date, not break date
+    # If filtering for Dec 30, show all records from shifts that STARTED on Dec 30
+    # This includes breaks/punches that happened on Dec 31 if the shift started Dec 30
     extended_start_date = (datetime.strptime(start_date, '%Y-%m-%d').date() - timedelta(days=1)).strftime('%Y-%m-%d')
     extended_end_date = (datetime.strptime(end_date, '%Y-%m-%d').date() + timedelta(days=1)).strftime('%Y-%m-%d')
     
+    # Get all shifts that START on the requested date range
+    shifts_in_range = Shift.query.filter(
+        Shift.shift_date >= start_date,
+        Shift.shift_date <= end_date
+    ).all()
+    
+    # Get agent IDs from shifts in range
+    agent_ids_in_range = {s.agent_id for s in shifts_in_range}
+    
+    # Query breaks - extend range to catch overnight shifts
     query = BreakRecord.query.filter(
         db.func.date(BreakRecord.start_time) >= extended_start_date,
         db.func.date(BreakRecord.start_time) <= extended_end_date
@@ -543,19 +555,26 @@ def get_breaks():
         return None
     
     # Group breaks by agent and shift period
+    # KEY CHANGE: Only show breaks that belong to shifts that STARTED in the requested date range
     agents_data = {}
     for br in regular_breaks:
-        # Filter breaks to only show those in the requested date range (but include them if they belong to a shift in that range)
-        break_date = br.start_time.date() if br.start_time else None
-        if break_date:
-            break_date_str = break_date.strftime('%Y-%m-%d')
-            # Only include if break is in the original date range OR if it belongs to a shift in that range
-            if break_date_str < start_date or break_date_str > end_date:
-                # Check if this break belongs to a shift in the date range
-                agent_shifts = shifts_by_agent.get(br.agent_id, [])
-                shift = find_shift_for_break(br, agent_shifts)
-                if not shift or shift.shift_date.strftime('%Y-%m-%d') < start_date or shift.shift_date.strftime('%Y-%m-%d') > end_date:
-                    continue  # Skip this break - it's outside the date range
+        # Find the shift this break belongs to
+        agent_shifts = shifts_by_agent.get(br.agent_id, [])
+        shift = find_shift_for_break(br, agent_shifts)
+        
+        # Filter: Only include if shift started in the requested date range
+        if shift:
+            shift_date_str = shift.shift_date.strftime('%Y-%m-%d')
+            # Only include breaks from shifts that STARTED in the date range
+            if shift_date_str < start_date or shift_date_str > end_date:
+                continue  # Skip - shift didn't start in the requested date range
+        else:
+            # No shift found - only include if break date is in range (fallback)
+            break_date = br.start_time.date() if br.start_time else None
+            if break_date:
+                break_date_str = break_date.strftime('%Y-%m-%d')
+                if break_date_str < start_date or break_date_str > end_date:
+                    continue  # Skip - break date outside range and no shift
         
         if br.agent_id not in agents_data:
             agents_data[br.agent_id] = {
@@ -563,10 +582,6 @@ def get_breaks():
                 'breaks': [],
                 'attendance': []
             }
-        
-        # Find the shift this break belongs to
-        agent_shifts = shifts_by_agent.get(br.agent_id, [])
-        shift = find_shift_for_break(br, agent_shifts)
         
         # Add shift date info to break dict for grouping
         break_dict = br.to_dict()
@@ -580,6 +595,38 @@ def get_breaks():
         agents_data[br.agent_id]['breaks'].append(break_dict)
     
     # Group attendance records by agent and pair punch in/out together
+    # Filter attendance records: only show those from shifts that STARTED in the date range
+    filtered_attendance = []
+    for br in attendance_records:
+        # Find the shift this punch belongs to
+        agent_shifts = shifts_by_agent.get(br.agent_id, [])
+        shift = None
+        
+        if br.start_time:
+            # Try to find shift by punch date or previous day (for overnight)
+            punch_date = br.start_time.date()
+            prev_date = punch_date - timedelta(days=1)
+            
+            for s in agent_shifts:
+                if s.shift_date == punch_date or s.shift_date == prev_date:
+                    shift = s
+                    break
+        
+        # Only include if shift started in the requested date range
+        if shift:
+            shift_date_str = shift.shift_date.strftime('%Y-%m-%d')
+            if shift_date_str >= start_date and shift_date_str <= end_date:
+                filtered_attendance.append(br)
+        else:
+            # No shift found - include if punch date is in range (fallback)
+            punch_date = br.start_time.date() if br.start_time else None
+            if punch_date:
+                punch_date_str = punch_date.strftime('%Y-%m-%d')
+                if punch_date_str >= start_date and punch_date_str <= end_date:
+                    filtered_attendance.append(br)
+    
+    attendance_records = filtered_attendance
+    
     # Sort attendance records by time
     attendance_records.sort(key=lambda x: x.start_time if x.start_time else datetime.min)
     

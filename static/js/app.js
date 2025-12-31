@@ -475,7 +475,7 @@ function createAttendanceCard(att) {
                     <span style="font-size: 11px; color: var(--text-secondary);">${punchOutDate}</span>
                     <span style="font-size: 12px; color: var(--text-secondary);">🕐 ${punchOutTime}</span>
                     ${att.punch_out.screenshot 
-                        ? `<img src="/uploads/${att.punch_out.screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${att.punch_out.screenshot}', 'Punch Out Screenshot')" style="width: 40px; height: 30px; object-fit: cover; border-radius: 4px; cursor: pointer;">`
+                        ? `<img src="/uploads/${att.punch_out.screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${att.punch_out.screenshot}', 'Punch Out Screenshot')" style="width: 40px; height: 30px; object-fit: cover; border-radius: 4px; cursor: pointer;" onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iMzAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjMwIiBmaWxsPSIjZWVlIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSI4IiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm90IGZvdW5kPC90ZXh0Pjwvc3Zn+'; this.style.cursor='default'; this.onclick=null;">`
                         : '<div style="width: 40px; height: 30px; background: var(--border); border-radius: 4px;"></div>'
                     }
                 </div>
@@ -490,7 +490,7 @@ function createAttendanceCard(att) {
                     <span style="font-size: 11px; color: var(--text-secondary);">${punchInDate}</span>
                     <span style="font-size: 12px; color: var(--text-secondary);">🕐 ${punchInTime}</span>
                     ${att.punch_in.screenshot 
-                        ? `<img src="/uploads/${att.punch_in.screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${att.punch_in.screenshot}', 'Punch In Screenshot')" style="width: 40px; height: 30px; object-fit: cover; border-radius: 4px; cursor: pointer;">`
+                        ? `<img src="/uploads/${att.punch_in.screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${att.punch_in.screenshot}', 'Punch In Screenshot')" style="width: 40px; height: 30px; object-fit: cover; border-radius: 4px; cursor: pointer;" onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iMzAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjMwIiBmaWxsPSIjZWVlIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSI4IiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm90IGZvdW5kPC90ZXh0Pjwvc3Zn+'; this.style.cursor='default'; this.onclick=null;">`
                         : '<div style="width: 40px; height: 30px; background: var(--border); border-radius: 4px;"></div>'
                     }
                 </div>
@@ -507,7 +507,7 @@ function createAttendanceCard(att) {
             <span style="font-weight: 600; flex: 1;">${att.name}</span>
             <span style="font-size: 12px; color: var(--text-secondary);">🕐 ${time}</span>
             ${att.screenshot 
-                ? `<img src="/uploads/${att.screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${att.screenshot}', '${att.name} Screenshot')" style="width: 40px; height: 30px; object-fit: cover; border-radius: 4px; cursor: pointer;">`
+                ? `<img src="/uploads/${att.screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${att.screenshot}', '${att.name} Screenshot')" style="width: 40px; height: 30px; object-fit: cover; border-radius: 4px; cursor: pointer;" onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iMzAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjMwIiBmaWxsPSIjZWVlIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSI4IiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm90IGZvdW5kPC90ZXh0Pjwvc3Zn+'; this.style.cursor='default'; this.onclick=null;">`
                 : '<div style="width: 40px; height: 30px; background: var(--border); border-radius: 4px;"></div>'
             }
         </div>
@@ -542,14 +542,14 @@ function createBreakMiniCard(br) {
                 <div class="screenshot-box">
                     <div class="screenshot-label">Start</div>
                     ${br.start_screenshot 
-                        ? `<img src="/uploads/${br.start_screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${br.start_screenshot}', 'Start Screenshot')">`
+                        ? `<img src="/uploads/${br.start_screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${br.start_screenshot}', 'Start Screenshot')" onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5Ob3QgZm91bmQ8L3RleHQ+PC9zdmc+'; this.style.cursor='default'; this.onclick=null;">`
                         : '<div class="screenshot-empty">—</div>'
                     }
                 </div>
                 <div class="screenshot-box">
                     <div class="screenshot-label">End</div>
                     ${br.end_screenshot 
-                        ? `<img src="/uploads/${br.end_screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${br.end_screenshot}', 'End Screenshot')">`
+                        ? `<img src="/uploads/${br.end_screenshot}" class="screenshot-thumb" onclick="showImage('/uploads/${br.end_screenshot}', 'End Screenshot')" onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTIiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5Ob3QgZm91bmQ8L3RleHQ+PC9zdmc+'; this.style.cursor='default'; this.onclick=null;">`
                         : '<div class="screenshot-empty">—</div>'
                     }
                 </div>

@@ -142,12 +142,13 @@ body {
     background: var(--gradient-primary-hover);
 }
 
-.btn-primary:hover {
-    background: var(--primary-hover);
+.btn-success {
+    background: var(--gradient-primary);
+    color: #ffffff;
 }
 
-.btn-success {
-    background: var(--success);
+.btn-success:hover {
+    background: var(--gradient-primary-hover);
 }
 
 .btn-danger {
@@ -155,7 +156,12 @@ body {
 }
 
 .btn-secondary {
-    background: #9c27b0;
+    background: var(--gradient-primary);
+    color: #ffffff;
+}
+
+.btn-secondary:hover {
+    background: var(--gradient-primary-hover);
 }
 
 .btn-block {
@@ -617,6 +623,7 @@ body {
 
 .agent-breaks {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     padding: 15px;
     overflow-x: auto;
