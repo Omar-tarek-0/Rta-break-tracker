@@ -723,12 +723,12 @@ def start_break():
     
     # Require punch_in before other breaks (except punch_in itself)
     # Also prevent breaks if already punched out
+    # IMPORTANT: Check if agent is still in an active shift period (overnight shifts)
     if break_type != 'punch_in':
         now = get_local_time().replace(tzinfo=None)
-        # Check for punch in today OR within last 24 hours (to handle overnight shifts)
         today = now.date()
-        yesterday = today - timedelta(days=1)
         
+        # Check for punch in today OR within last 24 hours (to handle overnight shifts)
         # First check for today's punch in
         punch_in = BreakRecord.query.filter(
             BreakRecord.agent_id == current_user.id,
@@ -745,6 +745,32 @@ def start_break():
                 BreakRecord.start_time >= twenty_four_hours_ago,
                 BreakRecord.start_time <= now
             ).order_by(BreakRecord.start_time.desc()).first()
+        
+        # If punch in found, check if there's a shift that started on punch in date
+        # and if we're still within that shift period (for overnight shifts)
+        if punch_in and punch_in.start_time:
+            punch_in_date = punch_in.start_time.date()
+            # Check if there's a shift that started on punch in date
+            shift = Shift.query.filter_by(
+                agent_id=current_user.id,
+                shift_date=punch_in_date
+            ).first()
+            
+            if shift:
+                # Calculate shift end time (could be next day for overnight shifts)
+                shift_start_datetime = datetime.combine(shift.shift_date, shift.start_time)
+                shift_end_datetime = datetime.combine(shift.shift_date, shift.end_time)
+                # If end time is before start time, it's an overnight shift (next day)
+                if shift.end_time < shift.start_time:
+                    shift_end_datetime += timedelta(days=1)
+                
+                # Check if current time is still within shift period
+                if now <= shift_end_datetime:
+                    # Still in shift period - punch in is valid, allow break
+                    pass
+                else:
+                    # Shift period ended - need new punch in
+                    punch_in = None
         
         if not punch_in:
             return jsonify({
