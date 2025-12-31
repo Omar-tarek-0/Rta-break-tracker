@@ -593,12 +593,27 @@ def start_break():
     # Require punch_in before other breaks (except punch_in itself)
     # Also prevent breaks if already punched out
     if break_type != 'punch_in':
-        today = get_local_time().date()
+        now = get_local_time().replace(tzinfo=None)
+        # Check for punch in today OR within last 24 hours (to handle overnight shifts)
+        today = now.date()
+        yesterday = today - timedelta(days=1)
+        
+        # First check for today's punch in
         punch_in = BreakRecord.query.filter(
             BreakRecord.agent_id == current_user.id,
             BreakRecord.break_type == 'punch_in',
             db.func.date(BreakRecord.start_time) == today
         ).first()
+        
+        # If no punch in today, check for punch in within last 24 hours (for overnight shifts)
+        if not punch_in:
+            twenty_four_hours_ago = now - timedelta(hours=24)
+            punch_in = BreakRecord.query.filter(
+                BreakRecord.agent_id == current_user.id,
+                BreakRecord.break_type == 'punch_in',
+                BreakRecord.start_time >= twenty_four_hours_ago,
+                BreakRecord.start_time <= now
+            ).order_by(BreakRecord.start_time.desc()).first()
         
         if not punch_in:
             return jsonify({
