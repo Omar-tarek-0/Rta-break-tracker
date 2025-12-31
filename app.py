@@ -596,9 +596,9 @@ def get_breaks():
     
     # Group attendance records by agent and pair punch in/out together
     # Show attendance records that:
-    # 1. Belong to shifts that STARTED in the date range, OR
-    # 2. Have punch date in the date range (for agents without shifts or manual entries)
-    # IMPORTANT: Always show punches in the date range, even if no shift is assigned
+    # 1. Have punch date in the date range (primary - shows punches on the day they happened), OR
+    # 2. Belong to shifts that STARTED in the date range (for overnight shifts - punch out on next day)
+    # IMPORTANT: Punch in on Dec 29 should show on Dec 29, not Dec 28
     filtered_attendance = []
     for br in attendance_records:
         if not br.start_time:
@@ -620,18 +620,24 @@ def get_breaks():
                 break
         
         # Include if:
-        # 1. Shift started in the requested date range (for overnight shifts), OR
-        # 2. Punch date is in the requested date range (for all punches, including manual ones)
+        # 1. Punch date is in the requested date range (primary - shows on the day it happened)
         should_include = False
         
-        # First check: Is punch date in the requested date range?
         if punch_date_str >= start_date and punch_date_str <= end_date:
+            # Punch happened in the date range - include it
             should_include = True
-        # Second check: Does it belong to a shift that started in the date range? (for overnight shifts)
         elif shift:
+            # Punch doesn't match date range, but check if it belongs to a shift that started in range
+            # This is for overnight shifts where punch out happens on next day
             shift_date_str = shift.shift_date.strftime('%Y-%m-%d')
             if shift_date_str >= start_date and shift_date_str <= end_date:
-                should_include = True
+                # Only include punch OUT (not punch IN) from overnight shifts
+                # Punch IN should always show on the day it happened
+                if br.break_type == 'punch_out':
+                    # Punch out from overnight shift - include it
+                    should_include = True
+                # Punch in should not be included if it's on a different day than the shift start
+                # (it's a new shift, should show on its own day)
         
         if should_include:
             filtered_attendance.append(br)
