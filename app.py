@@ -748,78 +748,104 @@ def start_break():
         now = get_local_time().replace(tzinfo=None)
         today = now.date()
         
-        # Check for punch in today OR within last 24 hours (to handle overnight shifts)
-        # First check for today's punch in
-        punch_in = BreakRecord.query.filter(
-            BreakRecord.agent_id == current_user.id,
-            BreakRecord.break_type == 'punch_in',
-            db.func.date(BreakRecord.start_time) == today
-        ).first()
-        
-        # If no punch in today, check for punch in within last 24 hours (for overnight shifts)
-        if not punch_in:
-            twenty_four_hours_ago = now - timedelta(hours=24)
+        # For punch_out: Just check if there's a punch_in that hasn't been punched out yet
+        # For other breaks: Check punch_in and shift period
+        if break_type == 'punch_out':
+            # Find the most recent punch_in (any time, not just today)
             punch_in = BreakRecord.query.filter(
                 BreakRecord.agent_id == current_user.id,
-                BreakRecord.break_type == 'punch_in',
-                BreakRecord.start_time >= twenty_four_hours_ago,
-                BreakRecord.start_time <= now
+                BreakRecord.break_type == 'punch_in'
             ).order_by(BreakRecord.start_time.desc()).first()
-        
-        # If punch in found, check if there's a shift that started on punch in date
-        # and if we're still within that shift period (for overnight shifts)
-        if punch_in and punch_in.start_time:
-            punch_in_date = punch_in.start_time.date()
-            # Check if there's a shift that started on punch in date
-            shift = Shift.query.filter_by(
-                agent_id=current_user.id,
-                shift_date=punch_in_date
-            ).first()
             
-            if shift:
-                # Calculate shift end time (could be next day for overnight shifts)
-                shift_start_datetime = datetime.combine(shift.shift_date, shift.start_time)
-                shift_end_datetime = datetime.combine(shift.shift_date, shift.end_time)
-                # If end time is before start time, it's an overnight shift (next day)
-                if shift.end_time < shift.start_time:
-                    shift_end_datetime += timedelta(days=1)
-                
-                # Check if current time is still within shift period
-                if now <= shift_end_datetime:
-                    # Still in shift period - punch in is valid, allow break
-                    pass
-                else:
-                    # Shift period ended - need new punch in
-                    punch_in = None
-        
-        if not punch_in:
-            return jsonify({
-                'error': 'You must punch in first before taking any breaks. Please punch in to continue.'
-            }), 400
-        
-        # Check if already punched out (today or within last 24 hours, and after punch in)
-        punch_out = BreakRecord.query.filter(
-            BreakRecord.agent_id == current_user.id,
-            BreakRecord.break_type == 'punch_out',
-            db.func.date(BreakRecord.start_time) == today
-        ).first()
-        
-        # If no punch out today, check within last 24 hours
-        if not punch_out:
-            twenty_four_hours_ago = now - timedelta(hours=24)
+            if not punch_in:
+                return jsonify({
+                    'error': 'You must punch in first before punching out. Please punch in to continue.'
+                }), 400
+            
+            # Check if there's already a punch_out after this punch_in
             punch_out = BreakRecord.query.filter(
                 BreakRecord.agent_id == current_user.id,
                 BreakRecord.break_type == 'punch_out',
-                BreakRecord.start_time >= twenty_four_hours_ago,
-                BreakRecord.start_time <= now
+                BreakRecord.start_time > punch_in.start_time
             ).order_by(BreakRecord.start_time.desc()).first()
-        
-        # If punched out, check if it's after the punch in
-        if punch_out and punch_in:
-            if punch_out.start_time > punch_in.start_time:
+            
+            if punch_out:
                 return jsonify({
-                    'error': 'You have already punched out for the day. Breaks are no longer available.'
+                    'error': 'You have already punched out after your last punch in.'
                 }), 400
+        else:
+            # For regular breaks: Check for punch in today OR within last 24 hours (to handle overnight shifts)
+            # First check for today's punch in
+            punch_in = BreakRecord.query.filter(
+                BreakRecord.agent_id == current_user.id,
+                BreakRecord.break_type == 'punch_in',
+                db.func.date(BreakRecord.start_time) == today
+            ).first()
+            
+            # If no punch in today, check for punch in within last 24 hours (for overnight shifts)
+            if not punch_in:
+                twenty_four_hours_ago = now - timedelta(hours=24)
+                punch_in = BreakRecord.query.filter(
+                    BreakRecord.agent_id == current_user.id,
+                    BreakRecord.break_type == 'punch_in',
+                    BreakRecord.start_time >= twenty_four_hours_ago,
+                    BreakRecord.start_time <= now
+                ).order_by(BreakRecord.start_time.desc()).first()
+            
+            # If punch in found, check if there's a shift that started on punch in date
+            # and if we're still within that shift period (for overnight shifts)
+            if punch_in and punch_in.start_time:
+                punch_in_date = punch_in.start_time.date()
+                # Check if there's a shift that started on punch in date
+                shift = Shift.query.filter_by(
+                    agent_id=current_user.id,
+                    shift_date=punch_in_date
+                ).first()
+                
+                if shift:
+                    # Calculate shift end time (could be next day for overnight shifts)
+                    shift_start_datetime = datetime.combine(shift.shift_date, shift.start_time)
+                    shift_end_datetime = datetime.combine(shift.shift_date, shift.end_time)
+                    # If end time is before start time, it's an overnight shift (next day)
+                    if shift.end_time < shift.start_time:
+                        shift_end_datetime += timedelta(days=1)
+                    
+                    # Check if current time is still within shift period
+                    if now <= shift_end_datetime:
+                        # Still in shift period - punch in is valid, allow break
+                        pass
+                    else:
+                        # Shift period ended - need new punch in
+                        punch_in = None
+            
+            if not punch_in:
+                return jsonify({
+                    'error': 'You must punch in first before taking any breaks. Please punch in to continue.'
+                }), 400
+            
+            # Check if already punched out (today or within last 24 hours, and after punch in)
+            punch_out = BreakRecord.query.filter(
+                BreakRecord.agent_id == current_user.id,
+                BreakRecord.break_type == 'punch_out',
+                db.func.date(BreakRecord.start_time) == today
+            ).first()
+            
+            # If no punch out today, check within last 24 hours
+            if not punch_out:
+                twenty_four_hours_ago = now - timedelta(hours=24)
+                punch_out = BreakRecord.query.filter(
+                    BreakRecord.agent_id == current_user.id,
+                    BreakRecord.break_type == 'punch_out',
+                    BreakRecord.start_time >= twenty_four_hours_ago,
+                    BreakRecord.start_time <= now
+                ).order_by(BreakRecord.start_time.desc()).first()
+            
+            # If punched out, check if it's after the punch in
+            if punch_out and punch_in:
+                if punch_out.start_time > punch_in.start_time:
+                    return jsonify({
+                        'error': 'You have already punched out for the day. Breaks are no longer available.'
+                    }), 400
     
     if not screenshot:
         return jsonify({'error': 'Screenshot is required'}), 400
