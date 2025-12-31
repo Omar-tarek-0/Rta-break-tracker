@@ -249,6 +249,35 @@ def init_db():
     """Initialize database and create default users"""
     db.create_all()
     
+    # Migrate Shift table if needed (add new columns, keep old ones for compatibility)
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(db.engine)
+        columns = [col['name'] for col in inspector.get_columns('shift')]
+        
+        # Check if new columns exist
+        has_start_date = 'start_date' in columns
+        has_end_date = 'end_date' in columns
+        has_old_shift_date = 'shift_date' in columns
+        
+        # If old column exists but new ones don't, add them
+        if has_old_shift_date and (not has_start_date or not has_end_date):
+            print("Migrating Shift table: Adding start_date and end_date columns...")
+            with db.engine.connect() as conn:
+                if not has_start_date:
+                    conn.execute(text("ALTER TABLE shift ADD COLUMN start_date DATE"))
+                    # Copy data from shift_date to start_date
+                    conn.execute(text("UPDATE shift SET start_date = shift_date WHERE start_date IS NULL"))
+                if not has_end_date:
+                    conn.execute(text("ALTER TABLE shift ADD COLUMN end_date DATE"))
+                    # Copy data from shift_date to end_date
+                    conn.execute(text("UPDATE shift SET end_date = shift_date WHERE end_date IS NULL"))
+                conn.commit()
+            print("✅ Shift table migration completed")
+    except Exception as e:
+        print(f"Note: Could not check/migrate Shift table schema: {e}")
+        # Continue anyway - db.create_all() will handle new columns
+    
     # Create default users if they don't exist
     for user_data in DEFAULT_USERS:
         if not User.query.filter_by(username=user_data['username']).first():
