@@ -407,6 +407,34 @@ function createAgentCard(agent) {
         `;
     }
     
+    // Group breaks by shift_date (shift period)
+    const breaksByShift = {};
+    agent.breaks.forEach(br => {
+        const shiftDate = br.shift_date || (br.start_time ? new Date(br.start_time).toISOString().split('T')[0] : 'unknown');
+        if (!breaksByShift[shiftDate]) {
+            breaksByShift[shiftDate] = [];
+        }
+        breaksByShift[shiftDate].push(br);
+    });
+    
+    // Create break sections grouped by shift period
+    let breaksSection = '';
+    const shiftDates = Object.keys(breaksByShift).sort().reverse(); // Most recent first
+    
+    shiftDates.forEach(shiftDate => {
+        const shiftBreaks = breaksByShift[shiftDate];
+        const shiftDateFormatted = new Date(shiftDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        
+        breaksSection += `
+            <div class="shift-breaks-group" style="margin-bottom: 15px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; padding: 5px; background: var(--surface-light); border-radius: 4px;">
+                    📅 Shift Period: ${shiftDateFormatted} (${shiftBreaks.length} break${shiftBreaks.length !== 1 ? 's' : ''})
+                </div>
+                ${shiftBreaks.map(br => createBreakMiniCard(br)).join('')}
+            </div>
+        `;
+    });
+    
     card.innerHTML = `
         <div class="agent-card-header">
             <span class="agent-name">👤 ${agent.agent_name}</span>
@@ -414,7 +442,7 @@ function createAgentCard(agent) {
         </div>
         ${attendanceSection}
         <div class="agent-breaks">
-            ${agent.breaks.map(br => createBreakMiniCard(br)).join('')}
+            ${breaksSection}
         </div>
     `;
     
