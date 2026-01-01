@@ -635,38 +635,38 @@ def get_breaks():
         def find_shift_for_break(break_record, agent_shifts):
             """Find the shift that a break belongs to"""
             if not break_record.start_time:
-            return None
-        
-        break_time = break_record.start_time
-        
-        # First, try to find punch in for this agent before this break (within last 24 hours)
-        punch_in = BreakRecord.query.filter(
-            BreakRecord.agent_id == break_record.agent_id,
-            BreakRecord.break_type == 'punch_in',
-            BreakRecord.start_time <= break_time,
-            BreakRecord.start_time >= break_time - timedelta(hours=24)
-        ).order_by(BreakRecord.start_time.desc()).first()
-        
-        if punch_in and punch_in.start_time:
-            # Find shift that matches this punch in date
-            punch_in_date = punch_in.start_time.date()
+                return None
+            
+            break_time = break_record.start_time
+            
+            # First, try to find punch in for this agent before this break (within last 24 hours)
+            punch_in = BreakRecord.query.filter(
+                BreakRecord.agent_id == break_record.agent_id,
+                BreakRecord.break_type == 'punch_in',
+                BreakRecord.start_time <= break_time,
+                BreakRecord.start_time >= break_time - timedelta(hours=24)
+            ).order_by(BreakRecord.start_time.desc()).first()
+            
+            if punch_in and punch_in.start_time:
+                # Find shift that matches this punch in date
+                punch_in_date = punch_in.start_time.date()
+                for shift in agent_shifts:
+                    if shift.start_date <= punch_in_date <= shift.end_date:
+                        return shift
+            
+            # If no punch in found, try to match by break time and shift date range
+            # For overnight shifts, break might be on next day but belong to previous day's shift
+            break_date = break_time.date()
+            
             for shift in agent_shifts:
-                if shift.start_date <= punch_in_date <= shift.end_date:
-                    return shift
-        
-        # If no punch in found, try to match by break time and shift date range
-        # For overnight shifts, break might be on next day but belong to previous day's shift
-        break_date = break_time.date()
-        
-        for shift in agent_shifts:
-            # Check if break date falls within shift date range
-            if shift.start_date <= break_date <= shift.end_date:
-                # Check if break time is within reasonable range (within 24 hours of shift start)
-                shift_start_datetime = datetime.combine(shift.start_date, shift.start_time)
-                time_diff = (break_time - shift_start_datetime).total_seconds() / 3600  # hours
-                if 0 <= time_diff <= 24:  # Within 24 hours of shift start
-                    return shift
-        
+                # Check if break date falls within shift date range
+                if shift.start_date <= break_date <= shift.end_date:
+                    # Check if break time is within reasonable range (within 24 hours of shift start)
+                    shift_start_datetime = datetime.combine(shift.start_date, shift.start_time)
+                    time_diff = (break_time - shift_start_datetime).total_seconds() / 3600  # hours
+                    if 0 <= time_diff <= 24:  # Within 24 hours of shift start
+                        return shift
+            
             return None
         
         # Group breaks by agent and shift period
