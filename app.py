@@ -998,7 +998,7 @@ def start_break():
         break_record.duration_minutes = 0
         break_record.is_overdue = False
         
-        # Prevent duplicate punch records for the same day
+        # Prevent duplicate punch records
         if break_type == 'punch_in':
             today = get_local_time().date()
             existing = BreakRecord.query.filter(
