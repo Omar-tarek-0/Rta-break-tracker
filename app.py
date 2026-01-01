@@ -716,42 +716,42 @@ def get_breaks():
         # IMPORTANT: Punch in on Dec 29 should show on Dec 29, not Dec 28
         filtered_attendance = []
         for br in attendance_records:
-        if not br.start_time:
-            continue
-        
-        punch_date = br.start_time.date()
-        punch_date_str = punch_date.strftime('%Y-%m-%d')
-        
-        # Find the shift this punch belongs to
-        agent_shifts = shifts_by_agent.get(br.agent_id, [])
-        shift = None
-        
-        # Try to find shift by punch date (check if punch date falls within shift date range)
-        for s in agent_shifts:
-            if s.start_date <= punch_date <= s.end_date:
-                shift = s
-                break
-        
-        # Include if:
-        # 1. Punch date is in the requested date range (primary - shows on the day it happened)
-        should_include = False
-        
-        if punch_date_str >= start_date and punch_date_str <= end_date:
-            # Punch happened in the date range - include it
-            should_include = True
-        elif shift:
-            # Punch doesn't match date range, but check if it belongs to a shift that started in range
-            # This is for overnight shifts where punch out happens on next day
-            shift_start_date_str = shift.start_date.strftime('%Y-%m-%d')
-            if shift_start_date_str >= start_date and shift_start_date_str <= end_date:
-                # Only include punch OUT (not punch IN) from overnight shifts
-                # Punch IN should always show on the day it happened
-                if br.break_type == 'punch_out':
-                    # Punch out from overnight shift - include it
-                    should_include = True
-                # Punch in should not be included if it's on a different day than the shift start
-                # (it's a new shift, should show on its own day)
-        
+            if not br.start_time:
+                continue
+            
+            punch_date = br.start_time.date()
+            punch_date_str = punch_date.strftime('%Y-%m-%d')
+            
+            # Find the shift this punch belongs to
+            agent_shifts = shifts_by_agent.get(br.agent_id, [])
+            shift = None
+            
+            # Try to find shift by punch date (check if punch date falls within shift date range)
+            for s in agent_shifts:
+                if s.start_date <= punch_date <= s.end_date:
+                    shift = s
+                    break
+            
+            # Include if:
+            # 1. Punch date is in the requested date range (primary - shows on the day it happened)
+            should_include = False
+            
+            if punch_date_str >= start_date and punch_date_str <= end_date:
+                # Punch happened in the date range - include it
+                should_include = True
+            elif shift:
+                # Punch doesn't match date range, but check if it belongs to a shift that started in range
+                # This is for overnight shifts where punch out happens on next day
+                shift_start_date_str = shift.start_date.strftime('%Y-%m-%d')
+                if shift_start_date_str >= start_date and shift_start_date_str <= end_date:
+                    # Only include punch OUT (not punch IN) from overnight shifts
+                    # Punch IN should always show on the day it happened
+                    if br.break_type == 'punch_out':
+                        # Punch out from overnight shift - include it
+                        should_include = True
+                    # Punch in should not be included if it's on a different day than the shift start
+                    # (it's a new shift, should show on its own day)
+            
             if should_include:
                 filtered_attendance.append(br)
         
