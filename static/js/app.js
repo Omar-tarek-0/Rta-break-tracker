@@ -1229,12 +1229,20 @@ async function submitShift() {
     const endTime = document.getElementById('shiftEndTime').value;
     
     if (!agentId || !startDate || !startTime || !endDate || !endTime) {
-        alert('Please fill in all fields');
+        const errorEl = document.getElementById('addShiftError');
+        if (errorEl) {
+            errorEl.textContent = 'Please fill in all fields';
+            errorEl.style.display = 'block';
+        } else {
+            alert('Please fill in all fields');
+        }
         return;
     }
     
     const errorEl = document.getElementById('addShiftError');
-    errorEl.style.display = 'none';
+    if (errorEl) {
+        errorEl.style.display = 'none';
+    }
     
     try {
         const response = await fetch('/api/shift', {
@@ -1256,12 +1264,23 @@ async function submitShift() {
             // Try to parse error message from JSON
             try {
                 const errorData = await response.json();
-                errorEl.textContent = errorData.error || `Server error: ${response.status}`;
+                const errorMsg = errorData.error || `Server error: ${response.status}`;
+                if (errorEl) {
+                    errorEl.textContent = errorMsg;
+                    errorEl.style.display = 'block';
+                } else {
+                    alert(errorMsg);
+                }
             } catch {
                 // If not JSON, show status text
-                errorEl.textContent = `Server error: ${response.status} ${response.statusText}`;
+                const errorMsg = `Server error: ${response.status} ${response.statusText}`;
+                if (errorEl) {
+                    errorEl.textContent = errorMsg;
+                    errorEl.style.display = 'block';
+                } else {
+                    alert(errorMsg);
+                }
             }
-            errorEl.style.display = 'block';
             return;
         }
         
@@ -1272,12 +1291,23 @@ async function submitShift() {
             hideAddShiftModal();
             loadSchedules(); // Refresh schedules if modal is open
         } else {
-            errorEl.textContent = data.error || 'Failed to create shift';
-            errorEl.style.display = 'block';
+            const errorMsg = data.error || 'Failed to create shift';
+            if (errorEl) {
+                errorEl.textContent = errorMsg;
+                errorEl.style.display = 'block';
+            } else {
+                alert(errorMsg);
+            }
         }
     } catch (err) {
-        errorEl.textContent = 'Network error: ' + err.message;
-        errorEl.style.display = 'block';
+        const errorMsg = 'Network error: ' + err.message;
+        if (errorEl) {
+            errorEl.textContent = errorMsg;
+            errorEl.style.display = 'block';
+        } else {
+            alert(errorMsg);
+            console.error('Error creating shift:', err);
+        }
     }
 }
 
