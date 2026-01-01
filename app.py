@@ -673,9 +673,9 @@ def get_breaks():
         # KEY CHANGE: Only show breaks that belong to shifts that STARTED in the requested date range
         agents_data = {}
         for br in regular_breaks:
-        # Find the shift this break belongs to
-        agent_shifts = shifts_by_agent.get(br.agent_id, [])
-        shift = find_shift_for_break(br, agent_shifts)
+            # Find the shift this break belongs to
+            agent_shifts = shifts_by_agent.get(br.agent_id, [])
+            shift = find_shift_for_break(br, agent_shifts)
         
         # Filter: Only include if shift started in the requested date range
         if shift:
