@@ -1233,6 +1233,9 @@ async function submitShift() {
         return;
     }
     
+    const errorEl = document.getElementById('addShiftError');
+    errorEl.style.display = 'none';
+    
     try {
         const response = await fetch('/api/shift', {
             method: 'POST',
@@ -1248,6 +1251,20 @@ async function submitShift() {
             })
         });
         
+        // Check if response is OK before parsing JSON
+        if (!response.ok) {
+            // Try to parse error message from JSON
+            try {
+                const errorData = await response.json();
+                errorEl.textContent = errorData.error || `Server error: ${response.status}`;
+            } catch {
+                // If not JSON, show status text
+                errorEl.textContent = `Server error: ${response.status} ${response.statusText}`;
+            }
+            errorEl.style.display = 'block';
+            return;
+        }
+        
         const data = await response.json();
         
         if (data.success) {
@@ -1255,10 +1272,12 @@ async function submitShift() {
             hideAddShiftModal();
             loadSchedules(); // Refresh schedules if modal is open
         } else {
-            alert(data.error || 'Failed to create shift');
+            errorEl.textContent = data.error || 'Failed to create shift';
+            errorEl.style.display = 'block';
         }
     } catch (err) {
-        alert('Network error: ' + err.message);
+        errorEl.textContent = 'Network error: ' + err.message;
+        errorEl.style.display = 'block';
     }
 }
 

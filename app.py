@@ -1455,69 +1455,84 @@ def delete_shift(shift_id):
 @login_required
 def create_shift():
     """Create a single shift for an agent"""
-    if not current_user.is_rtm():
-        return jsonify({'error': 'Unauthorized'}), 403
-    
-    data = request.json
-    agent_id = data.get('agent_id')
-    start_date_str = data.get('start_date')
-    start_time_str = data.get('start_time')
-    end_date_str = data.get('end_date')
-    end_time_str = data.get('end_time')
-    
-    if not all([agent_id, start_date_str, start_time_str, end_date_str, end_time_str]):
-        return jsonify({'error': 'All fields are required'}), 400
-    
     try:
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        start_time = datetime.strptime(start_time_str, '%H:%M').time()
-        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-        end_time = datetime.strptime(end_time_str, '%H:%M').time()
-    except ValueError:
-        return jsonify({'error': 'Invalid date or time format'}), 400
-    
-    # Validate that end date/time is after start date/time
-    start_datetime = datetime.combine(start_date, start_time)
-    end_datetime = datetime.combine(end_date, end_time)
-    if end_datetime <= start_datetime:
-        return jsonify({'error': 'End date/time must be after start date/time'}), 400
-    
-    # Check if shift already exists for this agent with same start date/time
-    existing = Shift.query.filter_by(
-        agent_id=agent_id,
-        start_date=start_date,
-        start_time=start_time
-    ).first()
-    
-    if existing:
-        # Update existing shift
-        existing.end_date = end_date
-        existing.end_time = end_time
-        existing.created_by = current_user.id
+        if not current_user.is_rtm():
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        if not request.json:
+            return jsonify({'error': 'Request body must be JSON'}), 400
+        
+        data = request.json
+        agent_id = data.get('agent_id')
+        start_date_str = data.get('start_date')
+        start_time_str = data.get('start_time')
+        end_date_str = data.get('end_date')
+        end_time_str = data.get('end_time')
+        
+        if not all([agent_id, start_date_str, start_time_str, end_date_str, end_time_str]):
+            return jsonify({'error': 'All fields are required'}), 400
+        
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            start_time = datetime.strptime(start_time_str, '%H:%M').time()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            end_time = datetime.strptime(end_time_str, '%H:%M').time()
+        except ValueError as e:
+            return jsonify({'error': f'Invalid date or time format: {str(e)}'}), 400
+        
+        # Validate that end date/time is after start date/time
+        start_datetime = datetime.combine(start_date, start_time)
+        end_datetime = datetime.combine(end_date, end_time)
+        if end_datetime <= start_datetime:
+            return jsonify({'error': 'End date/time must be after start date/time'}), 400
+        
+        # Check if shift already exists for this agent with same start date/time
+        existing = Shift.query.filter_by(
+            agent_id=agent_id,
+            start_date=start_date,
+            start_time=start_time
+        ).first()
+        
+        if existing:
+            # Update existing shift
+            existing.end_date = end_date
+            existing.end_time = end_time
+            existing.created_by = current_user.id
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'message': 'Shift updated',
+                'shift': existing.to_dict()
+            })
+        
+        # Create new shift
+        shift = Shift(
+            agent_id=agent_id,
+            start_date=start_date,
+            start_time=start_time,
+            end_date=end_date,
+            end_time=end_time,
+            created_by=current_user.id
+        )
+        db.session.add(shift)
         db.session.commit()
+        
         return jsonify({
             'success': True,
-            'message': 'Shift updated',
-            'shift': existing.to_dict()
+            'message': 'Shift created',
+            'shift': shift.to_dict()
         })
-    
-    # Create new shift
-    shift = Shift(
-        agent_id=agent_id,
-        start_date=start_date,
-        start_time=start_time,
-        end_date=end_date,
-        end_time=end_time,
-        created_by=current_user.id
-    )
-    db.session.add(shift)
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'message': 'Shift created',
-        'shift': shift.to_dict()
-    })
+    except Exception as e:
+        # Log the error for debugging
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error in create_shift: {e}")
+        print(error_trace)
+        # Return a proper JSON error response
+        return jsonify({
+            'error': f'Failed to create shift: {str(e)}',
+            'details': str(e) if DEBUG else 'Internal server error'
+        }), 500
 
 
 @app.route('/api/shift/<int:shift_id>', methods=['PUT'])
