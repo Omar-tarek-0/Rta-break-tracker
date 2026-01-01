@@ -1497,6 +1497,7 @@ def create_shift():
             # Update existing shift
             existing.end_date = end_date
             existing.end_time = end_time
+            existing.shift_date = start_date  # Update for backward compatibility
             existing.created_by = current_user.id
             db.session.commit()
             return jsonify({
@@ -1506,14 +1507,17 @@ def create_shift():
             })
         
         # Create new shift
+        # Set shift_date to start_date for backward compatibility with old database schema
         shift = Shift(
             agent_id=agent_id,
             start_date=start_date,
             start_time=start_time,
             end_date=end_date,
             end_time=end_time,
+            shift_date=start_date,  # For backward compatibility with old schema
             created_by=current_user.id
         )
+        
         db.session.add(shift)
         db.session.commit()
         
