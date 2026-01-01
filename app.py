@@ -1859,9 +1859,20 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     
     # Count breaks by type (exclude punch_in/punch_out as they're attendance, not breaks)
     break_counts = {}
+    lunch_count = 0
+    coaching_count = 0
+    
     for b in breaks:
         if b.break_type not in ['punch_in', 'punch_out']:
             break_counts[b.break_type] = break_counts.get(b.break_type, 0) + 1
+            
+            # Count lunch breaks
+            if b.break_type == 'lunch':
+                lunch_count += 1
+            
+            # Count coaching breaks (both coaching_aya and coaching_mostafa)
+            if b.break_type in ['coaching_aya', 'coaching_mostafa']:
+                coaching_count += 1
     
     # Calculate utilization
     # Working time breaks (coaching/meetings/overtime) count as working time, not breaks
@@ -2014,6 +2025,8 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
         'adherence': round(adherence, 1),
         'conformance': round(conformance, 1),
         'break_counts': break_counts,
+        'lunch_count': lunch_count,
+        'coaching_count': coaching_count,
         'shifts_count': len(shifts)
     }
 
