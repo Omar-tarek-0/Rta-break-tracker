@@ -2118,6 +2118,306 @@ def get_metrics():
     })
 
 
+# ==================== ATTENDANCE MANAGEMENT ====================
+
+@app.route('/api/attendance', methods=['GET'])
+@login_required
+def get_attendance():
+    """Get attendance records for date range"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    start_date_str = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
+    end_date_str = request.args.get('end_date', start_date_str)
+    agent_id = request.args.get('agent_id', type=int)
+    
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
+    
+    if end_date < start_date:
+        return jsonify({'error': 'End date must be after start date'}), 400
+    
+    # Get all agents or specific agent
+    if agent_id:
+        agents = User.query.filter_by(id=agent_id, role=ROLE_AGENT).all()
+    else:
+        agents = User.query.filter_by(role=ROLE_AGENT).order_by(User.full_name).all()
+    
+    attendance_records = []
+    summary_stats = {
+        'total_days': 0,
+        'present_days': 0,
+        'absent_days': 0,
+        'late_days': 0,
+        'on_time_days': 0,
+        'incomplete_days': 0,
+        'total_hours_worked': 0.0,
+        'total_late_minutes': 0
+    }
+    
+    # Tolerance for "on time" (5 minutes)
+    LATE_TOLERANCE_MINUTES = 5
+    
+    # Iterate through each date in range
+    current_date = start_date
+    while current_date <= end_date:
+        for agent in agents:
+            # Get shift for this date
+            shift = Shift.query.filter(
+                Shift.agent_id == agent.id,
+                Shift.start_date <= current_date,
+                Shift.end_date >= current_date
+            ).first()
+            
+            # Check if it's an off day
+            is_off_day = OffDay.query.filter_by(
+                agent_id=agent.id,
+                off_date=current_date
+            ).first() is not None
+            
+            # Get punch records for this date
+            punch_in = BreakRecord.query.filter(
+                BreakRecord.agent_id == agent.id,
+                BreakRecord.break_type == 'punch_in',
+                db.func.date(BreakRecord.start_time) == current_date
+            ).first()
+            
+            punch_out = BreakRecord.query.filter(
+                BreakRecord.agent_id == agent.id,
+                BreakRecord.break_type == 'punch_out',
+                db.func.date(BreakRecord.start_time) == current_date
+            ).first()
+            
+            # Determine status
+            status = 'not_scheduled'
+            late_minutes = 0
+            early_leave_minutes = 0
+            hours_worked = 0.0
+            
+            if is_off_day:
+                status = 'off_day'
+            elif shift:
+                if punch_in:
+                    # Calculate late minutes
+                    shift_start_datetime = datetime.combine(current_date, shift.start_time)
+                    punch_in_datetime = punch_in.start_time.replace(tzinfo=None)
+                    
+                    if punch_in_datetime > shift_start_datetime:
+                        late_minutes = int((punch_in_datetime - shift_start_datetime).total_seconds() / 60)
+                        if late_minutes > LATE_TOLERANCE_MINUTES:
+                            status = 'late'
+                        else:
+                            status = 'on_time'
+                    else:
+                        status = 'on_time'
+                    
+                    # Calculate hours worked
+                    if punch_out:
+                        punch_out_datetime = punch_out.start_time.replace(tzinfo=None)
+                        hours_worked = (punch_out_datetime - punch_in_datetime).total_seconds() / 3600
+                        
+                        # Check for early leave
+                        shift_end_datetime = datetime.combine(
+                            shift.end_date if shift.end_date > current_date else current_date,
+                            shift.end_time
+                        )
+                        if punch_out_datetime < shift_end_datetime:
+                            early_leave_minutes = int((shift_end_datetime - punch_out_datetime).total_seconds() / 60)
+                    else:
+                        # Still working - calculate until now
+                        now = get_local_time().replace(tzinfo=None)
+                        hours_worked = (now - punch_in_datetime).total_seconds() / 3600
+                        status = 'incomplete'
+                else:
+                    # Has shift but no punch in
+                    status = 'absent'
+            else:
+                # No shift assigned
+                if punch_in:
+                    status = 'present_no_shift'
+                    if punch_out:
+                        punch_out_datetime = punch_out.start_time.replace(tzinfo=None)
+                        punch_in_datetime = punch_in.start_time.replace(tzinfo=None)
+                        hours_worked = (punch_out_datetime - punch_in_datetime).total_seconds() / 3600
+                    else:
+                        now = get_local_time().replace(tzinfo=None)
+                        punch_in_datetime = punch_in.start_time.replace(tzinfo=None)
+                        hours_worked = (now - punch_in_datetime).total_seconds() / 3600
+                        status = 'incomplete'
+            
+            # Update summary stats
+            if shift and not is_off_day:
+                summary_stats['total_days'] += 1
+                if status == 'present' or status == 'on_time' or status == 'late' or status == 'incomplete':
+                    summary_stats['present_days'] += 1
+                elif status == 'absent':
+                    summary_stats['absent_days'] += 1
+                elif status == 'late':
+                    summary_stats['late_days'] += 1
+                elif status == 'on_time':
+                    summary_stats['on_time_days'] += 1
+                elif status == 'incomplete':
+                    summary_stats['incomplete_days'] += 1
+                
+                summary_stats['total_hours_worked'] += hours_worked
+                summary_stats['total_late_minutes'] += late_minutes
+            
+            attendance_records.append({
+                'agent_id': agent.id,
+                'agent_name': agent.full_name,
+                'date': current_date.isoformat(),
+                'shift': {
+                    'start_time': shift.start_time.strftime('%H:%M') if shift else None,
+                    'end_time': shift.end_time.strftime('%H:%M') if shift else None,
+                    'start_date': shift.start_date.isoformat() if shift else None,
+                    'end_date': shift.end_date.isoformat() if shift else None
+                } if shift else None,
+                'punch_in': {
+                    'time': punch_in.start_time.isoformat() if punch_in else None,
+                    'screenshot': punch_in.start_screenshot if punch_in else None
+                } if punch_in else None,
+                'punch_out': {
+                    'time': punch_out.start_time.isoformat() if punch_out else None,
+                    'screenshot': punch_out.start_screenshot if punch_out else None
+                } if punch_out else None,
+                'status': status,
+                'hours_worked': round(hours_worked, 2),
+                'late_minutes': late_minutes,
+                'early_leave_minutes': early_leave_minutes,
+                'is_off_day': is_off_day
+            })
+        
+        current_date += timedelta(days=1)
+    
+    # Calculate averages
+    if summary_stats['total_days'] > 0:
+        summary_stats['attendance_percentage'] = round(
+            (summary_stats['present_days'] / summary_stats['total_days']) * 100, 1
+        )
+        summary_stats['avg_hours_worked'] = round(
+            summary_stats['total_hours_worked'] / summary_stats['total_days'], 2
+        )
+    else:
+        summary_stats['attendance_percentage'] = 0
+        summary_stats['avg_hours_worked'] = 0
+    
+    return jsonify({
+        'attendance': attendance_records,
+        'summary': summary_stats,
+        'date_range': {'start': start_date_str, 'end': end_date_str}
+    })
+
+
+@app.route('/api/attendance/export', methods=['GET'])
+@login_required
+def export_attendance():
+    """Export attendance to Excel"""
+    if not current_user.is_rtm():
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    start_date = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
+    end_date = request.args.get('end_date', start_date)
+    
+    # Get attendance data
+    response = get_attendance()
+    if response.status_code != 200:
+        return response
+    
+    data = response.get_json()
+    attendance_records = data['attendance']
+    
+    # Create workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Attendance"
+    
+    # Styles
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="1a73e8", end_color="1a73e8", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    cell_alignment = Alignment(horizontal="center", vertical="center")
+    border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # Headers
+    headers = ['Agent Name', 'Date', 'Shift Time', 'Punch In', 'Punch Out', 'Status', 'Hours Worked', 'Late (min)', 'Early Leave (min)']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = border
+    
+    # Data rows
+    for row_idx, record in enumerate(attendance_records, 2):
+        # Format times
+        punch_in_time = ''
+        if record['punch_in'] and record['punch_in']['time']:
+            dt = datetime.fromisoformat(record['punch_in']['time'].replace('Z', '+00:00'))
+            punch_in_time = dt.strftime('%H:%M')
+        
+        punch_out_time = ''
+        if record['punch_out'] and record['punch_out']['time']:
+            dt = datetime.fromisoformat(record['punch_out']['time'].replace('Z', '+00:00'))
+            punch_out_time = dt.strftime('%H:%M')
+        
+        shift_time = ''
+        if record['shift']:
+            shift_time = f"{record['shift']['start_time']} - {record['shift']['end_time']}"
+        
+        # Status with emoji
+        status_map = {
+            'on_time': '✅ On Time',
+            'late': '⚠️ Late',
+            'absent': '❌ Absent',
+            'incomplete': '⏳ Incomplete',
+            'off_day': '🏖️ Off Day',
+            'present_no_shift': '✅ Present (No Shift)',
+            'not_scheduled': '➖ Not Scheduled'
+        }
+        status_display = status_map.get(record['status'], record['status'])
+        
+        row_data = [
+            record['agent_name'],
+            record['date'],
+            shift_time,
+            punch_in_time,
+            punch_out_time,
+            status_display,
+            record['hours_worked'],
+            record['late_minutes'],
+            record['early_leave_minutes']
+        ]
+        
+        for col, value in enumerate(row_data, 1):
+            cell = ws.cell(row=row_idx, column=col, value=value)
+            cell.alignment = cell_alignment
+            cell.border = border
+    
+    # Auto-adjust column widths
+    for col in range(1, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(col)].width = 18
+    
+    # Save to BytesIO
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    filename = f"attendance_{start_date}_to_{end_date}.xlsx"
+    return Response(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
+
+
 @app.route('/api/report/export', methods=['GET'])
 @login_required
 def export_report():

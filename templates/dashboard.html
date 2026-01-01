@@ -112,6 +112,7 @@
             <!-- Tabs -->
             <div class="tabs">
                 <button class="tab-btn active" data-tab="breaks" onclick="switchTab('breaks')">📋 Break Records</button>
+                <button class="tab-btn" data-tab="attendance" onclick="switchTab('attendance')">📅 Attendance</button>
                 <button class="tab-btn" data-tab="reports" onclick="switchTab('reports')">📊 Reports & Export</button>
             </div>
             
@@ -124,6 +125,90 @@
                 
                 <div id="breaksContainer" class="breaks-container">
                     <div class="loading">Loading breaks...</div>
+                </div>
+            </div>
+            
+            <!-- Attendance Tab -->
+            <div id="tab-attendance" class="tab-content" style="display: none;">
+                <div class="main-header">
+                    <h2>📅 Attendance Sheet</h2>
+                </div>
+                
+                <div class="reports-section">
+                    <!-- Date Range -->
+                    <div class="report-controls">
+                        <div class="form-group">
+                            <label>📅 Date Range</label>
+                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                <input type="date" id="attendanceStartDate" class="form-input">
+                                <span>to</span>
+                                <input type="date" id="attendanceEndDate" class="form-input">
+                                <button class="btn btn-sm" onclick="setAttendancePeriod('today')">Today</button>
+                                <button class="btn btn-sm" onclick="setAttendancePeriod('week')">7 Days</button>
+                                <button class="btn btn-sm" onclick="setAttendancePeriod('month')">30 Days</button>
+                                <select id="attendanceAgentFilter" class="form-select" style="max-width: 200px;">
+                                    <option value="">All Agents</option>
+                                    {% for agent in agents %}
+                                    <option value="{{ agent.id }}">{{ agent.full_name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button class="btn btn-primary" onclick="loadAttendance()">📅 Load Attendance</button>
+                                <button class="btn btn-success" onclick="exportAttendanceToExcel()">📥 Export to Excel</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Summary Cards -->
+                    <div class="summary-cards" id="attendanceSummaryCards" style="display: none;">
+                        <div class="summary-card">
+                            <div class="summary-label">Total Days</div>
+                            <div class="summary-value" id="attendanceTotalDays">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Present Days</div>
+                            <div class="summary-value" id="attendancePresentDays">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Absent Days</div>
+                            <div class="summary-value" id="attendanceAbsentDays">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Late Days</div>
+                            <div class="summary-value" id="attendanceLateDays">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Attendance %</div>
+                            <div class="summary-value" id="attendancePercentage">-</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-label">Avg Hours/Day</div>
+                            <div class="summary-value" id="attendanceAvgHours">-</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Attendance Table -->
+                    <div class="metrics-table-container" style="margin-top: 20px;">
+                        <table class="metrics-table">
+                            <thead>
+                                <tr>
+                                    <th>Agent Name</th>
+                                    <th>Date</th>
+                                    <th>Shift Time</th>
+                                    <th>Punch In</th>
+                                    <th>Punch Out</th>
+                                    <th>Status</th>
+                                    <th>Hours Worked</th>
+                                    <th>Late (min)</th>
+                                    <th>Early Leave (min)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceTableBody">
+                                <tr>
+                                    <td colspan="9" class="empty-message">Select date range and click "Load Attendance"</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             

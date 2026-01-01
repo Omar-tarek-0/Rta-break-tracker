@@ -931,6 +931,171 @@ function exportToExcel() {
     window.location.href = `/api/report/export?start_date=${startDate}&end_date=${endDate}`;
 }
 
+// ==================== ATTENDANCE MANAGEMENT ====================
+
+function setAttendancePeriod(period) {
+    const today = new Date();
+    let startDate, endDate;
+    
+    if (period === 'today') {
+        startDate = endDate = formatDate(today);
+    } else if (period === 'week') {
+        startDate = formatDate(today);
+        const weekLater = new Date(today);
+        weekLater.setDate(today.getDate() + 6);
+        endDate = formatDate(weekLater);
+    } else if (period === 'month') {
+        startDate = formatDate(today);
+        const monthLater = new Date(today);
+        monthLater.setDate(today.getDate() + 29);
+        endDate = formatDate(monthLater);
+    }
+    
+    document.getElementById('attendanceStartDate').value = startDate;
+    document.getElementById('attendanceEndDate').value = endDate;
+}
+
+async function loadAttendance() {
+    const startDate = document.getElementById('attendanceStartDate').value;
+    const endDate = document.getElementById('attendanceEndDate').value;
+    const agentId = document.getElementById('attendanceAgentFilter').value;
+    
+    if (!startDate || !endDate) {
+        alert('Please select a date range');
+        return;
+    }
+    
+    const tbody = document.getElementById('attendanceTableBody');
+    const summaryCards = document.getElementById('attendanceSummaryCards');
+    
+    tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading attendance...</td></tr>';
+    
+    try {
+        let url = `/api/attendance?start_date=${startDate}&end_date=${endDate}`;
+        if (agentId) {
+            url += `&agent_id=${agentId}`;
+        }
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('Failed to load attendance');
+        }
+        
+        const data = await response.json();
+        
+        if (!data.attendance || data.attendance.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="empty-message">No attendance records found for the selected period</td></tr>';
+            summaryCards.style.display = 'none';
+            return;
+        }
+        
+        // Update summary cards
+        const summary = data.summary;
+        document.getElementById('attendanceTotalDays').textContent = summary.total_days || 0;
+        document.getElementById('attendancePresentDays').textContent = summary.present_days || 0;
+        document.getElementById('attendanceAbsentDays').textContent = summary.absent_days || 0;
+        document.getElementById('attendanceLateDays').textContent = summary.late_days || 0;
+        document.getElementById('attendancePercentage').textContent = (summary.attendance_percentage || 0) + '%';
+        document.getElementById('attendanceAvgHours').textContent = (summary.avg_hours_worked || 0) + 'h';
+        summaryCards.style.display = 'flex';
+        
+        // Populate table
+        tbody.innerHTML = '';
+        
+        data.attendance.forEach(record => {
+            // Format times
+            let punchInTime = '-';
+            if (record.punch_in && record.punch_in.time) {
+                const dt = new Date(record.punch_in.time);
+                punchInTime = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            }
+            
+            let punchOutTime = '-';
+            if (record.punch_out && record.punch_out.time) {
+                const dt = new Date(record.punch_out.time);
+                punchOutTime = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            }
+            
+            let shiftTime = '-';
+            if (record.shift) {
+                shiftTime = `${record.shift.start_time} - ${record.shift.end_time}`;
+            }
+            
+            // Status with color coding
+            let statusClass = '';
+            let statusText = '';
+            switch(record.status) {
+                case 'on_time':
+                    statusClass = 'status-good';
+                    statusText = '✅ On Time';
+                    break;
+                case 'late':
+                    statusClass = 'status-warning';
+                    statusText = '⚠️ Late';
+                    break;
+                case 'absent':
+                    statusClass = 'status-bad';
+                    statusText = '❌ Absent';
+                    break;
+                case 'incomplete':
+                    statusClass = 'status-warning';
+                    statusText = '⏳ Incomplete';
+                    break;
+                case 'off_day':
+                    statusClass = '';
+                    statusText = '🏖️ Off Day';
+                    break;
+                case 'present_no_shift':
+                    statusClass = 'status-good';
+                    statusText = '✅ Present (No Shift)';
+                    break;
+                case 'not_scheduled':
+                    statusClass = '';
+                    statusText = '➖ Not Scheduled';
+                    break;
+                default:
+                    statusText = record.status;
+            }
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${record.agent_name}</td>
+                <td>${new Date(record.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                <td>${shiftTime}</td>
+                <td>${punchInTime}</td>
+                <td>${punchOutTime}</td>
+                <td class="${statusClass}">${statusText}</td>
+                <td>${record.hours_worked}h</td>
+                <td>${record.late_minutes > 0 ? record.late_minutes : '-'}</td>
+                <td>${record.early_leave_minutes > 0 ? record.early_leave_minutes : '-'}</td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="9" class="error-message">Error: ${err.message}</td></tr>`;
+        summaryCards.style.display = 'none';
+    }
+}
+
+function exportAttendanceToExcel() {
+    const startDate = document.getElementById('attendanceStartDate').value;
+    const endDate = document.getElementById('attendanceEndDate').value;
+    const agentId = document.getElementById('attendanceAgentFilter').value;
+    
+    if (!startDate || !endDate) {
+        alert('Please select a date range');
+        return;
+    }
+    
+    let url = `/api/attendance/export?start_date=${startDate}&end_date=${endDate}`;
+    if (agentId) {
+        url += `&agent_id=${agentId}`;
+    }
+    
+    window.location.href = url;
+}
+
 // ==================== SCHEDULES MODAL ====================
 
 function showSchedulesModal() {
