@@ -807,6 +807,13 @@ function switchTab(tabName) {
             document.getElementById('reportStartDate').value = formatDate(today);
             document.getElementById('reportEndDate').value = formatDate(today);
         }
+        
+        // Load data when switching to attendance tab
+        if (tabName === 'attendance') {
+            const today = new Date();
+            document.getElementById('attendanceStartDate').value = formatDate(today);
+            document.getElementById('attendanceEndDate').value = formatDate(today);
+        }
     }
 }
 

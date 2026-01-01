@@ -2318,16 +2318,125 @@ def export_attendance():
     if not current_user.is_rtm():
         return jsonify({'error': 'Unauthorized'}), 403
     
-    start_date = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
-    end_date = request.args.get('end_date', start_date)
+    start_date_str = request.args.get('start_date', get_local_time().strftime('%Y-%m-%d'))
+    end_date_str = request.args.get('end_date', start_date_str)
+    agent_id = request.args.get('agent_id', type=int)
     
-    # Get attendance data
-    response = get_attendance()
-    if response.status_code != 200:
-        return response
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
     
-    data = response.get_json()
-    attendance_records = data['attendance']
+    if end_date < start_date:
+        return jsonify({'error': 'End date must be after start date'}), 400
+    
+    # Get all agents or specific agent
+    if agent_id:
+        agents = User.query.filter_by(id=agent_id, role=ROLE_AGENT).all()
+    else:
+        agents = User.query.filter_by(role=ROLE_AGENT).order_by(User.full_name).all()
+    
+    attendance_records = []
+    LATE_TOLERANCE_MINUTES = 5
+    
+    # Iterate through each date in range
+    current_date = start_date
+    while current_date <= end_date:
+        for agent in agents:
+            shift = Shift.query.filter(
+                Shift.agent_id == agent.id,
+                Shift.start_date <= current_date,
+                Shift.end_date >= current_date
+            ).first()
+            
+            is_off_day = OffDay.query.filter_by(
+                agent_id=agent.id,
+                off_date=current_date
+            ).first() is not None
+            
+            punch_in = BreakRecord.query.filter(
+                BreakRecord.agent_id == agent.id,
+                BreakRecord.break_type == 'punch_in',
+                db.func.date(BreakRecord.start_time) == current_date
+            ).first()
+            
+            punch_out = BreakRecord.query.filter(
+                BreakRecord.agent_id == agent.id,
+                BreakRecord.break_type == 'punch_out',
+                db.func.date(BreakRecord.start_time) == current_date
+            ).first()
+            
+            status = 'not_scheduled'
+            late_minutes = 0
+            early_leave_minutes = 0
+            hours_worked = 0.0
+            
+            if is_off_day:
+                status = 'off_day'
+            elif shift:
+                if punch_in:
+                    shift_start_datetime = datetime.combine(current_date, shift.start_time)
+                    punch_in_datetime = punch_in.start_time.replace(tzinfo=None)
+                    
+                    if punch_in_datetime > shift_start_datetime:
+                        late_minutes = int((punch_in_datetime - shift_start_datetime).total_seconds() / 60)
+                        if late_minutes > LATE_TOLERANCE_MINUTES:
+                            status = 'late'
+                        else:
+                            status = 'on_time'
+                    else:
+                        status = 'on_time'
+                    
+                    if punch_out:
+                        punch_out_datetime = punch_out.start_time.replace(tzinfo=None)
+                        hours_worked = (punch_out_datetime - punch_in_datetime).total_seconds() / 3600
+                        
+                        shift_end_datetime = datetime.combine(
+                            shift.end_date if shift.end_date > current_date else current_date,
+                            shift.end_time
+                        )
+                        if punch_out_datetime < shift_end_datetime:
+                            early_leave_minutes = int((shift_end_datetime - punch_out_datetime).total_seconds() / 60)
+                    else:
+                        now = get_local_time().replace(tzinfo=None)
+                        hours_worked = (now - punch_in_datetime).total_seconds() / 3600
+                        status = 'incomplete'
+                else:
+                    status = 'absent'
+            else:
+                if punch_in:
+                    status = 'present_no_shift'
+                    if punch_out:
+                        punch_out_datetime = punch_out.start_time.replace(tzinfo=None)
+                        punch_in_datetime = punch_in.start_time.replace(tzinfo=None)
+                        hours_worked = (punch_out_datetime - punch_in_datetime).total_seconds() / 3600
+                    else:
+                        now = get_local_time().replace(tzinfo=None)
+                        punch_in_datetime = punch_in.start_time.replace(tzinfo=None)
+                        hours_worked = (now - punch_in_datetime).total_seconds() / 3600
+                        status = 'incomplete'
+            
+            attendance_records.append({
+                'agent_name': agent.full_name,
+                'date': current_date.isoformat(),
+                'shift': {
+                    'start_time': shift.start_time.strftime('%H:%M') if shift else None,
+                    'end_time': shift.end_time.strftime('%H:%M') if shift else None
+                } if shift else None,
+                'punch_in': {
+                    'time': punch_in.start_time.isoformat() if punch_in else None
+                } if punch_in else None,
+                'punch_out': {
+                    'time': punch_out.start_time.isoformat() if punch_out else None
+                } if punch_out else None,
+                'status': status,
+                'hours_worked': round(hours_worked, 2),
+                'late_minutes': late_minutes,
+                'early_leave_minutes': early_leave_minutes
+            })
+        
+        current_date += timedelta(days=1)
     
     # Create workbook
     wb = Workbook()
