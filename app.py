@@ -85,6 +85,8 @@ class Shift(db.Model):
     start_time = db.Column(db.Time, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
+    # Legacy column for backward compatibility (will be removed after migration)
+    shift_date = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'))
     
