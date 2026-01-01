@@ -387,29 +387,52 @@ def agent_view():
         off_date=today
     ).first() is not None
     
-    # Check punch in/out status for today
+    # Check punch in/out status - look for most recent punch_in (not just today's)
+    # This handles overnight shifts where punch_in was yesterday
     punch_in = BreakRecord.query.filter(
+        BreakRecord.agent_id == current_user.id,
+        BreakRecord.break_type == 'punch_in'
+    ).order_by(BreakRecord.start_time.desc()).first()
+    
+    # Determine agent status based on most recent punch_in
+    if not punch_in:
+        punch_status = 'not_punched_in'
+    else:
+        # Check if there's a punch_out after the most recent punch_in
+        punch_out = BreakRecord.query.filter(
+            BreakRecord.agent_id == current_user.id,
+            BreakRecord.break_type == 'punch_out',
+            BreakRecord.start_time > punch_in.start_time
+        ).order_by(BreakRecord.start_time.desc()).first()
+        
+        if punch_out:
+            # Check if punch_out is from today (to show status correctly)
+            punch_out_today = BreakRecord.query.filter(
+                BreakRecord.agent_id == current_user.id,
+                BreakRecord.break_type == 'punch_out',
+                db.func.date(BreakRecord.start_time) == today
+            ).first()
+            if punch_out_today:
+                punch_status = 'punched_out'
+            else:
+                # Punched out but not today - still allow new punch in
+                punch_status = 'not_punched_in'
+        else:
+            # Has punch_in but no punch_out after it - still working
+            punch_status = 'punched_in'
+    
+    # Get today's punch records for display
+    punch_in_today = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
         BreakRecord.break_type == 'punch_in',
         db.func.date(BreakRecord.start_time) == today
     ).first()
     
-    punch_out = BreakRecord.query.filter(
+    punch_out_today = BreakRecord.query.filter(
         BreakRecord.agent_id == current_user.id,
         BreakRecord.break_type == 'punch_out',
         db.func.date(BreakRecord.start_time) == today
     ).first()
-    
-    # Determine agent status
-    # not_punched_in: hasn't punched in yet today
-    # punched_in: punched in but not out
-    # punched_out: already punched out for the day
-    if not punch_in:
-        punch_status = 'not_punched_in'
-    elif punch_out:
-        punch_status = 'punched_out'
-    else:
-        punch_status = 'punched_in'
     
     return render_template('agent.html',
         user=current_user,
@@ -420,8 +443,8 @@ def agent_view():
         upcoming_offdays=upcoming_offdays,
         is_off_day=is_off_day,
         punch_status=punch_status,
-        punch_in_time=punch_in.start_time if punch_in else None,
-        punch_out_time=punch_out.start_time if punch_out else None,
+        punch_in_time=punch_in_today.start_time if punch_in_today else (punch_in.start_time if punch_in else None),
+        punch_out_time=punch_out_today.start_time if punch_out_today else None,
         break_types=BREAK_INFO,
         break_durations=BREAK_DURATIONS
     )
