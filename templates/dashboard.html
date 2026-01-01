@@ -350,7 +350,7 @@
 <div id="addShiftModal" class="modal" style="display: none;">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>➕ Add Shift</h3>
+            <h3>➕ Add Shift Schedule</h3>
             <button class="modal-close" onclick="hideAddShiftModal()">×</button>
         </div>
         <div class="modal-body">
@@ -363,27 +363,80 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="form-group">
-                <label>📅 Start Date</label>
-                <input type="date" id="shiftStartDate" class="form-input">
+            
+            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <label style="font-weight: 600; margin-bottom: 10px; display: block;">⏰ Shift Time (Daily)</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 12px;">Start Time</label>
+                        <input type="time" id="shiftStartTime" class="form-input">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 12px;">End Time</label>
+                        <input type="time" id="shiftEndTime" class="form-input">
+                    </div>
+                </div>
+                <small style="color: #666; font-size: 11px; display: block; margin-top: 5px;">
+                    Example: 16:00 (4 PM) to 01:00 (1 AM) for overnight shifts
+                </small>
             </div>
-            <div class="form-group">
-                <label>⏰ Start Time</label>
-                <input type="time" id="shiftStartTime" class="form-input">
+            
+            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                <label style="font-weight: 600; margin-bottom: 10px; display: block;">📅 Schedule Period</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 12px;">From Date</label>
+                        <input type="date" id="shiftPeriodStartDate" class="form-input">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 12px;">To Date</label>
+                        <input type="date" id="shiftPeriodEndDate" class="form-input">
+                    </div>
+                </div>
             </div>
+            
             <div class="form-group">
-                <label>📅 End Date</label>
-                <input type="date" id="shiftEndDate" class="form-input">
+                <label style="font-weight: 600; margin-bottom: 10px; display: block;">📆 Working Days (Select days agent will work)</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 8px 12px; background: #fff; border: 2px solid #ddd; border-radius: 6px; user-select: none;">
+                        <input type="checkbox" id="dayMon" value="0" style="margin-right: 6px;" checked>
+                        <span>Monday</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 8px 12px; background: #fff; border: 2px solid #ddd; border-radius: 6px; user-select: none;">
+                        <input type="checkbox" id="dayTue" value="1" style="margin-right: 6px;" checked>
+                        <span>Tuesday</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 8px 12px; background: #fff; border: 2px solid #ddd; border-radius: 6px; user-select: none;">
+                        <input type="checkbox" id="dayWed" value="2" style="margin-right: 6px;" checked>
+                        <span>Wednesday</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 8px 12px; background: #fff; border: 2px solid #ddd; border-radius: 6px; user-select: none;">
+                        <input type="checkbox" id="dayThu" value="3" style="margin-right: 6px;" checked>
+                        <span>Thursday</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 8px 12px; background: #fff; border: 2px solid #ddd; border-radius: 6px; user-select: none;">
+                        <input type="checkbox" id="dayFri" value="4" style="margin-right: 6px;" checked>
+                        <span>Friday</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 8px 12px; background: #fff; border: 2px solid #ddd; border-radius: 6px; user-select: none;">
+                        <input type="checkbox" id="daySat" value="5" style="margin-right: 6px;">
+                        <span>Saturday</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 8px 12px; background: #fff; border: 2px solid #ddd; border-radius: 6px; user-select: none;">
+                        <input type="checkbox" id="daySun" value="6" style="margin-right: 6px;">
+                        <span>Sunday</span>
+                    </label>
+                </div>
+                <small style="color: #666; font-size: 11px; display: block; margin-top: 8px;">
+                    Unselected days will be automatically marked as off days
+                </small>
             </div>
-            <div class="form-group">
-                <label>⏰ End Time</label>
-                <input type="time" id="shiftEndTime" class="form-input">
-            </div>
+            
             <p id="addShiftError" class="error-message" style="display: none;"></p>
         </div>
         <div class="modal-footer">
             <button class="btn" onclick="hideAddShiftModal()">Cancel</button>
-            <button class="btn btn-primary" onclick="submitShift()">Save Shift</button>
+            <button class="btn btn-primary" onclick="submitShift()">💾 Save Schedule</button>
         </div>
     </div>
 </div>

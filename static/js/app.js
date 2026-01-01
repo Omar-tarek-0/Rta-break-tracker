@@ -1207,14 +1207,28 @@ async function submitManualBreak() {
 
 function showAddShiftModal() {
     document.getElementById('addShiftModal').style.display = 'flex';
-    // Set default dates to today
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('shiftStartDate').value = today;
-    document.getElementById('shiftEndDate').value = today;
+    
+    // Set default date range (today to 2 weeks from now)
+    const today = new Date();
+    const twoWeeksLater = new Date(today);
+    twoWeeksLater.setDate(today.getDate() + 14);
+    
+    document.getElementById('shiftPeriodStartDate').value = today.toISOString().split('T')[0];
+    document.getElementById('shiftPeriodEndDate').value = twoWeeksLater.toISOString().split('T')[0];
+    
+    // Set default time (4 PM to 1 AM)
+    document.getElementById('shiftStartTime').value = '16:00';
+    document.getElementById('shiftEndTime').value = '01:00';
+    
     // Clear previous values
     document.getElementById('shiftAgent').value = '';
-    document.getElementById('shiftStartTime').value = '';
-    document.getElementById('shiftEndTime').value = '';
+    
+    // Clear error message
+    const errorEl = document.getElementById('addShiftError');
+    if (errorEl) {
+        errorEl.style.display = 'none';
+        errorEl.textContent = '';
+    }
 }
 
 function hideAddShiftModal() {
@@ -1223,18 +1237,47 @@ function hideAddShiftModal() {
 
 async function submitShift() {
     const agentId = document.getElementById('shiftAgent').value;
-    const startDate = document.getElementById('shiftStartDate').value;
     const startTime = document.getElementById('shiftStartTime').value;
-    const endDate = document.getElementById('shiftEndDate').value;
     const endTime = document.getElementById('shiftEndTime').value;
+    const periodStartDate = document.getElementById('shiftPeriodStartDate').value;
+    const periodEndDate = document.getElementById('shiftPeriodEndDate').value;
     
-    if (!agentId || !startDate || !startTime || !endDate || !endTime) {
+    // Get selected working days
+    const workingDays = [];
+    const dayCheckboxes = [
+        document.getElementById('dayMon'),
+        document.getElementById('dayTue'),
+        document.getElementById('dayWed'),
+        document.getElementById('dayThu'),
+        document.getElementById('dayFri'),
+        document.getElementById('daySat'),
+        document.getElementById('daySun')
+    ];
+    
+    dayCheckboxes.forEach((cb, index) => {
+        if (cb && cb.checked) {
+            workingDays.push(index); // 0=Monday, 1=Tuesday, etc.
+        }
+    });
+    
+    if (!agentId || !startTime || !endTime || !periodStartDate || !periodEndDate) {
         const errorEl = document.getElementById('addShiftError');
         if (errorEl) {
-            errorEl.textContent = 'Please fill in all fields';
+            errorEl.textContent = 'Please fill in all required fields';
             errorEl.style.display = 'block';
         } else {
-            alert('Please fill in all fields');
+            alert('Please fill in all required fields');
+        }
+        return;
+    }
+    
+    if (workingDays.length === 0) {
+        const errorEl = document.getElementById('addShiftError');
+        if (errorEl) {
+            errorEl.textContent = 'Please select at least one working day';
+            errorEl.style.display = 'block';
+        } else {
+            alert('Please select at least one working day');
         }
         return;
     }
@@ -1245,17 +1288,18 @@ async function submitShift() {
     }
     
     try {
-        const response = await fetch('/api/shift', {
+        const response = await fetch('/api/shift/schedule', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 agent_id: parseInt(agentId),
-                start_date: startDate,
                 start_time: startTime,
-                end_date: endDate,
-                end_time: endTime
+                end_time: endTime,
+                period_start_date: periodStartDate,
+                period_end_date: periodEndDate,
+                working_days: workingDays
             })
         });
         
@@ -1287,11 +1331,15 @@ async function submitShift() {
         const data = await response.json();
         
         if (data.success) {
-            alert(data.message || 'Shift created successfully!');
+            alert(data.message || `Schedule created successfully! Created ${data.shifts_created || 0} shifts and ${data.offdays_created || 0} off days.`);
             hideAddShiftModal();
             loadSchedules(); // Refresh schedules if modal is open
+            // Refresh breaks if on breaks tab
+            if (document.getElementById('tab-breaks') && document.getElementById('tab-breaks').classList.contains('active')) {
+                loadBreaks();
+            }
         } else {
-            const errorMsg = data.error || 'Failed to create shift';
+            const errorMsg = data.error || 'Failed to create schedule';
             if (errorEl) {
                 errorEl.textContent = errorMsg;
                 errorEl.style.display = 'block';
@@ -1306,7 +1354,7 @@ async function submitShift() {
             errorEl.style.display = 'block';
         } else {
             alert(errorMsg);
-            console.error('Error creating shift:', err);
+            console.error('Error creating schedule:', err);
         }
     }
 }

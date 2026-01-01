@@ -1541,6 +1541,123 @@ def create_shift():
         }), 500
 
 
+@app.route('/api/shift/schedule', methods=['POST'])
+@login_required
+def create_shift_schedule():
+    """Create shifts and off days based on a recurring schedule"""
+    try:
+        if not current_user.is_rtm():
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        if not request.json:
+            return jsonify({'error': 'Request body must be JSON'}), 400
+        
+        data = request.json
+        agent_id = data.get('agent_id')
+        start_time_str = data.get('start_time')
+        end_time_str = data.get('end_time')
+        period_start_date_str = data.get('period_start_date')
+        period_end_date_str = data.get('period_end_date')
+        working_days = data.get('working_days', [])  # Array of day numbers (0=Monday, 6=Sunday)
+        
+        if not all([agent_id, start_time_str, end_time_str, period_start_date_str, period_end_date_str]):
+            return jsonify({'error': 'All fields are required'}), 400
+        
+        if not working_days or len(working_days) == 0:
+            return jsonify({'error': 'At least one working day must be selected'}), 400
+        
+        try:
+            start_time = datetime.strptime(start_time_str, '%H:%M').time()
+            end_time = datetime.strptime(end_time_str, '%H:%M').time()
+            period_start_date = datetime.strptime(period_start_date_str, '%Y-%m-%d').date()
+            period_end_date = datetime.strptime(period_end_date_str, '%Y-%m-%d').date()
+        except ValueError as e:
+            return jsonify({'error': f'Invalid date or time format: {str(e)}'}), 400
+        
+        if period_end_date < period_start_date:
+            return jsonify({'error': 'End date must be after start date'}), 400
+        
+        # Convert working_days to set for faster lookup
+        working_days_set = set(working_days)
+        
+        shifts_created = 0
+        offdays_created = 0
+        
+        # Iterate through each date in the period
+        current_date = period_start_date
+        while current_date <= period_end_date:
+            # Get day of week (0=Monday, 6=Sunday)
+            day_of_week = current_date.weekday()
+            
+            if day_of_week in working_days_set:
+                # This is a working day - create a shift
+                # Handle overnight shifts: if end_time < start_time, shift ends next day
+                if end_time < start_time:
+                    # Overnight shift: ends the next day
+                    shift_end_date = current_date + timedelta(days=1)
+                else:
+                    # Regular shift: ends same day
+                    shift_end_date = current_date
+                
+                # Check if shift already exists for this date
+                existing_shift = Shift.query.filter_by(
+                    agent_id=agent_id,
+                    start_date=current_date,
+                    start_time=start_time
+                ).first()
+                
+                if not existing_shift:
+                    shift = Shift(
+                        agent_id=agent_id,
+                        start_date=current_date,
+                        start_time=start_time,
+                        end_date=shift_end_date,
+                        end_time=end_time,
+                        shift_date=current_date,  # For backward compatibility
+                        created_by=current_user.id
+                    )
+                    db.session.add(shift)
+                    shifts_created += 1
+            else:
+                # This is an off day - create an off day record
+                existing_offday = OffDay.query.filter_by(
+                    agent_id=agent_id,
+                    off_date=current_date
+                ).first()
+                
+                if not existing_offday:
+                    offday = OffDay(
+                        agent_id=agent_id,
+                        off_date=current_date,
+                        reason='Scheduled off day',
+                        created_by=current_user.id
+                    )
+                    db.session.add(offday)
+                    offdays_created += 1
+            
+            # Move to next day
+            current_date += timedelta(days=1)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Schedule created successfully',
+            'shifts_created': shifts_created,
+            'offdays_created': offdays_created
+        })
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error in create_shift_schedule: {e}")
+        print(error_trace)
+        return jsonify({
+            'error': f'Failed to create schedule: {str(e)}',
+            'details': str(e) if DEBUG else 'Internal server error'
+        }), 500
+
+
 @app.route('/api/shift/<int:shift_id>', methods=['PUT'])
 @login_required
 def update_shift(shift_id):
