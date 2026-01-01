@@ -592,9 +592,9 @@ def get_breaks():
         # For overnight shifts (e.g., 4pm-1am), breaks after midnight belong to the shift that started the previous day
         # First, get all shifts that start or end in the date range (extended range to catch overnight shifts)
         try:
-        # Get shifts where start_date or end_date falls within the extended range
-        # This catches shifts that overlap with the date range
-        all_shifts = Shift.query.filter(
+            # Get shifts where start_date or end_date falls within the extended range
+            # This catches shifts that overlap with the date range
+            all_shifts = Shift.query.filter(
             db.or_(
                 db.and_(
                     Shift.start_date >= extended_start_date,
