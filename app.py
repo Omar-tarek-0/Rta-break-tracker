@@ -611,18 +611,18 @@ def get_breaks():
                 )
             ).all()
         except Exception as e:
-        # If database schema hasn't been updated yet (start_date/end_date don't exist), 
-        # try to use the old shift_date column as fallback
-        try:
-            # Fallback: try with start_date only
-            all_shifts = Shift.query.filter(
-                Shift.start_date >= extended_start_date,
-                Shift.start_date <= extended_end_date
-            ).all()
-        except:
-            # If that also fails, return empty list (no shifts found or schema mismatch)
-            print(f"Warning: Could not query shifts - schema may need migration: {e}")
-            all_shifts = []
+            # If database schema hasn't been updated yet (start_date/end_date don't exist), 
+            # try to use the old shift_date column as fallback
+            try:
+                # Fallback: try with start_date only
+                all_shifts = Shift.query.filter(
+                    Shift.start_date >= extended_start_date,
+                    Shift.start_date <= extended_end_date
+                ).all()
+            except:
+                # If that also fails, return empty list (no shifts found or schema mismatch)
+                print(f"Warning: Could not query shifts - schema may need migration: {e}")
+                all_shifts = []
         
         # Create a mapping: agent_id -> list of shifts
         shifts_by_agent = {}
