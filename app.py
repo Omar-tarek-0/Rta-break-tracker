@@ -1544,7 +1544,7 @@ def create_shift():
 @app.route('/api/shift/schedule', methods=['POST'])
 @login_required
 def create_shift_schedule():
-    """Create shifts and off days based on a recurring schedule"""
+    """Create shifts and off days based on a recurring schedule for multiple agents"""
     try:
         if not current_user.is_rtm():
             return jsonify({'error': 'Unauthorized'}), 403
@@ -1553,14 +1553,24 @@ def create_shift_schedule():
             return jsonify({'error': 'Request body must be JSON'}), 400
         
         data = request.json
-        agent_id = data.get('agent_id')
+        # Support both single agent_id (backward compatibility) and multiple agent_ids
+        agent_ids = data.get('agent_ids', [])
+        if not agent_ids:
+            # Fallback to single agent_id for backward compatibility
+            agent_id = data.get('agent_id')
+            if agent_id:
+                agent_ids = [agent_id]
+        
         start_time_str = data.get('start_time')
         end_time_str = data.get('end_time')
         period_start_date_str = data.get('period_start_date')
         period_end_date_str = data.get('period_end_date')
         working_days = data.get('working_days', [])  # Array of day numbers (0=Monday, 6=Sunday)
         
-        if not all([agent_id, start_time_str, end_time_str, period_start_date_str, period_end_date_str]):
+        if not agent_ids or len(agent_ids) == 0:
+            return jsonify({'error': 'At least one agent must be selected'}), 400
+        
+        if not all([start_time_str, end_time_str, period_start_date_str, period_end_date_str]):
             return jsonify({'error': 'All fields are required'}), 400
         
         if not working_days or len(working_days) == 0:
@@ -1580,71 +1590,79 @@ def create_shift_schedule():
         # Convert working_days to set for faster lookup
         working_days_set = set(working_days)
         
-        shifts_created = 0
-        offdays_created = 0
+        total_shifts_created = 0
+        total_offdays_created = 0
         
-        # Iterate through each date in the period
-        current_date = period_start_date
-        while current_date <= period_end_date:
-            # Get day of week (0=Monday, 6=Sunday)
-            day_of_week = current_date.weekday()
+        # Process each selected agent
+        for agent_id in agent_ids:
+            shifts_created = 0
+            offdays_created = 0
             
-            if day_of_week in working_days_set:
-                # This is a working day - create a shift
-                # Handle overnight shifts: if end_time < start_time, shift ends next day
-                if end_time < start_time:
-                    # Overnight shift: ends the next day
-                    shift_end_date = current_date + timedelta(days=1)
-                else:
-                    # Regular shift: ends same day
-                    shift_end_date = current_date
+            # Iterate through each date in the period
+            current_date = period_start_date
+            while current_date <= period_end_date:
+                # Get day of week (0=Monday, 6=Sunday)
+                day_of_week = current_date.weekday()
                 
-                # Check if shift already exists for this date
-                existing_shift = Shift.query.filter_by(
-                    agent_id=agent_id,
-                    start_date=current_date,
-                    start_time=start_time
-                ).first()
-                
-                if not existing_shift:
-                    shift = Shift(
+                if day_of_week in working_days_set:
+                    # This is a working day - create a shift
+                    # Handle overnight shifts: if end_time < start_time, shift ends next day
+                    if end_time < start_time:
+                        # Overnight shift: ends the next day
+                        shift_end_date = current_date + timedelta(days=1)
+                    else:
+                        # Regular shift: ends same day
+                        shift_end_date = current_date
+                    
+                    # Check if shift already exists for this date
+                    existing_shift = Shift.query.filter_by(
                         agent_id=agent_id,
                         start_date=current_date,
-                        start_time=start_time,
-                        end_date=shift_end_date,
-                        end_time=end_time,
-                        shift_date=current_date,  # For backward compatibility
-                        created_by=current_user.id
-                    )
-                    db.session.add(shift)
-                    shifts_created += 1
-            else:
-                # This is an off day - create an off day record
-                existing_offday = OffDay.query.filter_by(
-                    agent_id=agent_id,
-                    off_date=current_date
-                ).first()
-                
-                if not existing_offday:
-                    offday = OffDay(
+                        start_time=start_time
+                    ).first()
+                    
+                    if not existing_shift:
+                        shift = Shift(
+                            agent_id=agent_id,
+                            start_date=current_date,
+                            start_time=start_time,
+                            end_date=shift_end_date,
+                            end_time=end_time,
+                            shift_date=current_date,  # For backward compatibility
+                            created_by=current_user.id
+                        )
+                        db.session.add(shift)
+                        shifts_created += 1
+                        total_shifts_created += 1
+                else:
+                    # This is an off day - create an off day record
+                    existing_offday = OffDay.query.filter_by(
                         agent_id=agent_id,
-                        off_date=current_date,
-                        reason='Scheduled off day',
-                        created_by=current_user.id
-                    )
-                    db.session.add(offday)
-                    offdays_created += 1
-            
-            # Move to next day
-            current_date += timedelta(days=1)
+                        off_date=current_date
+                    ).first()
+                    
+                    if not existing_offday:
+                        offday = OffDay(
+                            agent_id=agent_id,
+                            off_date=current_date,
+                            reason='Scheduled off day',
+                            created_by=current_user.id
+                        )
+                        db.session.add(offday)
+                        offdays_created += 1
+                        total_offdays_created += 1
+                
+                # Move to next day
+                current_date += timedelta(days=1)
         
         db.session.commit()
         
         return jsonify({
             'success': True,
-            'message': f'Schedule created successfully',
-            'shifts_created': shifts_created,
-            'offdays_created': offdays_created
+            'message': f'Schedule created successfully for {len(agent_ids)} agent(s)',
+            'shifts_created': total_shifts_created,
+            'offdays_created': total_offdays_created,
+            'agents_processed': len(agent_ids)
         })
     except Exception as e:
         db.session.rollback()

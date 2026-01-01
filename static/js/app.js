@@ -1220,8 +1220,10 @@ function showAddShiftModal() {
     document.getElementById('shiftStartTime').value = '16:00';
     document.getElementById('shiftEndTime').value = '01:00';
     
-    // Clear previous values
-    document.getElementById('shiftAgent').value = '';
+    // Clear previous agent selections
+    document.querySelectorAll('.shift-agent-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
     
     // Clear error message
     const errorEl = document.getElementById('addShiftError');
@@ -1236,7 +1238,12 @@ function hideAddShiftModal() {
 }
 
 async function submitShift() {
-    const agentId = document.getElementById('shiftAgent').value;
+    // Get selected agents
+    const selectedAgents = [];
+    document.querySelectorAll('.shift-agent-checkbox:checked').forEach(cb => {
+        selectedAgents.push(parseInt(cb.value));
+    });
+    
     const startTime = document.getElementById('shiftStartTime').value;
     const endTime = document.getElementById('shiftEndTime').value;
     const periodStartDate = document.getElementById('shiftPeriodStartDate').value;
@@ -1260,7 +1267,18 @@ async function submitShift() {
         }
     });
     
-    if (!agentId || !startTime || !endTime || !periodStartDate || !periodEndDate) {
+    if (selectedAgents.length === 0) {
+        const errorEl = document.getElementById('addShiftError');
+        if (errorEl) {
+            errorEl.textContent = 'Please select at least one agent';
+            errorEl.style.display = 'block';
+        } else {
+            alert('Please select at least one agent');
+        }
+        return;
+    }
+    
+    if (!startTime || !endTime || !periodStartDate || !periodEndDate) {
         const errorEl = document.getElementById('addShiftError');
         if (errorEl) {
             errorEl.textContent = 'Please fill in all required fields';
@@ -1294,7 +1312,7 @@ async function submitShift() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                agent_id: parseInt(agentId),
+                agent_ids: selectedAgents,
                 start_time: startTime,
                 end_time: endTime,
                 period_start_date: periodStartDate,

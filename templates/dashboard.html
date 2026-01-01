@@ -355,13 +355,20 @@
         </div>
         <div class="modal-body">
             <div class="form-group">
-                <label>👤 Agent</label>
-                <select id="shiftAgent" class="form-select">
-                    <option value="">Select Agent</option>
+                <label style="font-weight: 600; margin-bottom: 10px; display: block;">👤 Select Agents (Multiple Selection)</label>
+                <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 10px; background: #fff;">
                     {% for agent in agents %}
-                    <option value="{{ agent.id }}">{{ agent.full_name }}</option>
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 8px; margin: 4px 0; border-radius: 4px; user-select: none; transition: background 0.2s;" 
+                           onmouseover="this.style.background='#f5f5f5'" 
+                           onmouseout="this.style.background='transparent'">
+                        <input type="checkbox" class="shift-agent-checkbox" value="{{ agent.id }}" style="margin-right: 8px; cursor: pointer;">
+                        <span>{{ agent.full_name }}</span>
+                    </label>
                     {% endfor %}
-                </select>
+                </div>
+                <small style="color: #666; font-size: 11px; display: block; margin-top: 5px;">
+                    Select one or more agents to assign this schedule to
+                </small>
             </div>
             
             <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 15px 0;">
