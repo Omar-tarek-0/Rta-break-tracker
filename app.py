@@ -1008,15 +1008,7 @@ def start_break():
             ).first()
             if existing:
                 return jsonify({'error': 'You have already punched in today'}), 400
-        elif break_type == 'punch_out':
-            today = get_local_time().date()
-            existing = BreakRecord.query.filter(
-                BreakRecord.agent_id == current_user.id,
-                BreakRecord.break_type == 'punch_out',
-                db.func.date(BreakRecord.start_time) == today
-            ).first()
-            if existing:
-                return jsonify({'error': 'You have already punched out today'}), 400
+        # Note: punch_out duplicate check is handled earlier in the function (lines 892-901)
     
     db.session.add(break_record)
     db.session.commit()
