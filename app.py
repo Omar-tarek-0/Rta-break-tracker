@@ -633,8 +633,8 @@ def get_breaks():
         
         # Function to find which shift a break belongs to (based on punch in time or shift time)
         def find_shift_for_break(break_record, agent_shifts):
-        """Find the shift that a break belongs to"""
-        if not break_record.start_time:
+            """Find the shift that a break belongs to"""
+            if not break_record.start_time:
             return None
         
         break_time = break_record.start_time
