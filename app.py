@@ -595,22 +595,22 @@ def get_breaks():
             # Get shifts where start_date or end_date falls within the extended range
             # This catches shifts that overlap with the date range
             all_shifts = Shift.query.filter(
-            db.or_(
-                db.and_(
-                    Shift.start_date >= extended_start_date,
-                    Shift.start_date <= extended_end_date
-                ),
-                db.and_(
-                    Shift.end_date >= extended_start_date,
-                    Shift.end_date <= extended_end_date
-                ),
-                db.and_(
-                    Shift.start_date <= extended_start_date,
-                    Shift.end_date >= extended_end_date
+                db.or_(
+                    db.and_(
+                        Shift.start_date >= extended_start_date,
+                        Shift.start_date <= extended_end_date
+                    ),
+                    db.and_(
+                        Shift.end_date >= extended_start_date,
+                        Shift.end_date <= extended_end_date
+                    ),
+                    db.and_(
+                        Shift.start_date <= extended_start_date,
+                        Shift.end_date >= extended_end_date
+                    )
                 )
-            )
-        ).all()
-    except Exception as e:
+            ).all()
+        except Exception as e:
         # If database schema hasn't been updated yet (start_date/end_date don't exist), 
         # try to use the old shift_date column as fallback
         try:
