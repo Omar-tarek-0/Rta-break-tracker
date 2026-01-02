@@ -1872,7 +1872,8 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     # Separate breaks into working time breaks and regular breaks
     working_time_breaks = [b for b in breaks if b.break_type in WORKING_TIME_BREAKS and b.end_time]
     # Regular breaks include emergency (emergency counts as break time, not working time)
-    regular_breaks = [b for b in breaks if b.break_type not in WORKING_TIME_BREAKS + ['punch_in', 'punch_out'] and b.end_time]
+    # Compensation is excluded from regular breaks (it's compensation for missed work, not a break violation)
+    regular_breaks = [b for b in breaks if b.break_type not in WORKING_TIME_BREAKS + ['punch_in', 'punch_out', 'compensation'] and b.end_time]
     
     # Total break minutes (including emergency - emergency counts as break time)
     # Excluding working time breaks and punch records
@@ -1881,9 +1882,9 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     exceeding_break_minutes = max(0, total_break_minutes - total_allowed_break_minutes)
     
     # Count incidents (overdue breaks) - only for regular breaks
-    # Exclude compensation from incidents (compensation is for missed work hours, not a violation)
+    # Compensation is already excluded from regular_breaks, so it won't be counted here
     # Use effective overdue status (working time breaks are never overdue)
-    incidents = sum(1 for b in regular_breaks if b.get_effective_overdue_status() and b.break_type != 'compensation')
+    incidents = sum(1 for b in regular_breaks if b.get_effective_overdue_status())
     
     # Count emergency breaks
     emergency_count = sum(1 for b in breaks if b.break_type == 'emergency')
