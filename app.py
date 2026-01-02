@@ -174,8 +174,8 @@ class BreakRecord(db.Model):
         return self.break_type in WORKING_TIME_BREAKS
     
     def get_effective_overdue_status(self):
-        """Get overdue status, but always False for working time breaks"""
-        if self.is_working_time_break():
+        """Get overdue status, but always False for working time breaks and compensation"""
+        if self.is_working_time_break() or self.break_type == 'compensation':
             return False
         return self.is_overdue
     
@@ -1058,9 +1058,10 @@ def end_break():
     active.end_screenshot = screenshot_path
     active.duration_minutes = int((active.end_time - active.start_time).total_seconds() / 60)
     
-    # Working time breaks (coaching/meetings) should never be marked as overdue
-    # They count as working time regardless of duration
-    if active.break_type in WORKING_TIME_BREAKS:
+    # Working time breaks (coaching/meetings) and compensation should never be marked as overdue
+    # Working time breaks count as working time regardless of duration
+    # Compensation is for missed work hours, not a violation
+    if active.break_type in WORKING_TIME_BREAKS or active.break_type == 'compensation':
         active.is_overdue = False
     else:
         active.is_overdue = active.duration_minutes > active.get_allowed_duration()
