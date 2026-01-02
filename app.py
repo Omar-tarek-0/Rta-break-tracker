@@ -757,16 +757,27 @@ def get_breaks():
                     shift = s
                     break
             
-            # Include if punch date is in the requested date range
-            # Show punches on the day they actually happened, not on the shift start day
-            # This prevents duplicate display: punch out on Jan 2 should only show on Jan 2, not Jan 1
+            # Include if:
+            # 1. Punch date is in the requested date range (primary - shows on the day it happened), OR
+            # 2. Belong to shifts that STARTED in the date range (for overnight shifts - punch out on next day)
+            # IMPORTANT: Punch in on Dec 29 should show on Dec 29, not Dec 28
             should_include = False
             
             if punch_date_str >= start_date and punch_date_str <= end_date:
                 # Punch happened in the date range - include it
                 should_include = True
-            # Removed the elif logic that was showing punch_out on shift start day
-            # This was causing duplicates - punch out should only show on the day it happened
+            elif shift:
+                # Punch doesn't match date range, but check if it belongs to a shift that started in range
+                # This is for overnight shifts where punch out happens on next day
+                shift_start_date_str = shift.start_date.strftime('%Y-%m-%d')
+                if shift_start_date_str >= start_date and shift_start_date_str <= end_date:
+                    # Only include punch OUT (not punch IN) from overnight shifts
+                    # Punch IN should always show on the day it happened
+                    if br.break_type == 'punch_out':
+                        # Punch out from overnight shift - include it on the shift start day
+                        should_include = True
+                    # Punch in should not be included if it's on a different day than the shift start
+                    # (it's a new shift, should show on its own day)
             
             if should_include:
                 filtered_attendance.append(br)
