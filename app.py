@@ -787,7 +787,9 @@ def get_breaks():
                     # Standalone punch out (shouldn't happen, but handle it)
                     standalone_punch_outs.append(br)
         
-        # Determine display date for each pair (shift start day or punch in day)
+        # Determine display date for each pair
+        # Logic: Show on shift start day ONLY if punch in happened on shift start day
+        # If punch in happened on a later day, show on the punch in day (it's a new shift or continuation)
         for pair_key, pair_data in punch_pairs.items():
             punch_in = pair_data['punch_in']
             punch_in_date = punch_in.start_time.date()
@@ -800,10 +802,15 @@ def get_breaks():
                     shift = s
                     break
             
-            # Display date is shift start date (if shift exists) or punch in date
-            if shift:
+            # Display date logic:
+            # - If punch in happened on shift start day, show on shift start day
+            # - If punch in happened on a later day (even if same shift), show on punch in day
+            # This prevents Jan 2 punch in from showing on Jan 1
+            if shift and punch_in_date == shift.start_date:
+                # Punch in on shift start day - show on shift start day
                 pair_data['display_date'] = shift.start_date
             else:
+                # Punch in on a later day - show on the day it happened
                 pair_data['display_date'] = punch_in_date
         
         # Filter pairs to include only those whose display_date is in the requested range
