@@ -735,52 +735,88 @@ def get_breaks():
             agents_data[br.agent_id]['breaks'].append(break_dict)
         
         # Group attendance records by agent and pair punch in/out together
-        # Show attendance records that:
-        # 1. Have punch date in the date range (primary - shows punches on the day they happened), OR
-        # 2. Belong to shifts that STARTED in the date range (for overnight shifts - punch out on next day)
-        # IMPORTANT: Punch in on Dec 29 should show on Dec 29, not Dec 28
-        filtered_attendance = []
+        # NEW LOGIC: Punch in and punch out are always paired and shown together
+        # They appear on the shift start day (or punch in day if no shift)
+        # Punch out never appears separately on its own day
+        
+        # First, pair all punch in/out records by agent
+        # Key: (agent_id, punch_in_id) -> (punch_in, punch_out)
+        punch_pairs = {}
+        standalone_punch_outs = []
+        
         for br in attendance_records:
             if not br.start_time:
                 continue
             
-            punch_date = br.start_time.date()
-            punch_date_str = punch_date.strftime('%Y-%m-%d')
+            if br.break_type == 'punch_in':
+                # Find matching punch out (next punch out after this punch in)
+                punch_out = None
+                for br2 in attendance_records:
+                    if (br2.break_type == 'punch_out' and 
+                        br2.agent_id == br.agent_id and 
+                        br2.start_time and 
+                        br2.start_time > br.start_time):
+                        # Check if there's no other punch in between
+                        has_punch_in_between = False
+                        for br3 in attendance_records:
+                            if (br3.break_type == 'punch_in' and 
+                                br3.agent_id == br.agent_id and 
+                                br3.start_time and
+                                br.start_time < br3.start_time < br2.start_time):
+                                has_punch_in_between = True
+                                break
+                        if not has_punch_in_between:
+                            punch_out = br2
+                            break
+                
+                # Store the pair
+                pair_key = (br.agent_id, br.id)
+                punch_pairs[pair_key] = {
+                    'punch_in': br,
+                    'punch_out': punch_out,
+                    'display_date': None  # Will be determined based on shift
+                }
+            elif br.break_type == 'punch_out':
+                # Check if this punch out is already paired with a punch in
+                is_paired = False
+                for pair_key, pair_data in punch_pairs.items():
+                    if pair_data['punch_out'] and pair_data['punch_out'].id == br.id:
+                        is_paired = True
+                        break
+                if not is_paired:
+                    # Standalone punch out (shouldn't happen, but handle it)
+                    standalone_punch_outs.append(br)
+        
+        # Determine display date for each pair (shift start day or punch in day)
+        for pair_key, pair_data in punch_pairs.items():
+            punch_in = pair_data['punch_in']
+            punch_in_date = punch_in.start_time.date()
             
-            # Find the shift this punch belongs to
-            agent_shifts = shifts_by_agent.get(br.agent_id, [])
+            # Find the shift this punch in belongs to
+            agent_shifts = shifts_by_agent.get(punch_in.agent_id, [])
             shift = None
-            
-            # Try to find shift by punch date (check if punch date falls within shift date range)
             for s in agent_shifts:
-                if s.start_date <= punch_date <= s.end_date:
+                if s.start_date <= punch_in_date <= s.end_date:
                     shift = s
                     break
             
-            # Include if:
-            # 1. Punch date is in the requested date range (primary - shows on the day it happened), OR
-            # 2. Belong to shifts that STARTED in the date range (for overnight shifts - punch out on next day)
-            # IMPORTANT: Punch in on Dec 29 should show on Dec 29, not Dec 28
-            should_include = False
-            
-            if punch_date_str >= start_date and punch_date_str <= end_date:
-                # Punch happened in the date range - include it
-                should_include = True
-            elif shift:
-                # Punch doesn't match date range, but check if it belongs to a shift that started in range
-                # This is for overnight shifts where punch out happens on next day
-                shift_start_date_str = shift.start_date.strftime('%Y-%m-%d')
-                if shift_start_date_str >= start_date and shift_start_date_str <= end_date:
-                    # Only include punch OUT (not punch IN) from overnight shifts
-                    # Punch IN should always show on the day it happened
-                    if br.break_type == 'punch_out':
-                        # Punch out from overnight shift - include it on the shift start day
-                        should_include = True
-                    # Punch in should not be included if it's on a different day than the shift start
-                    # (it's a new shift, should show on its own day)
-            
-            if should_include:
-                filtered_attendance.append(br)
+            # Display date is shift start date (if shift exists) or punch in date
+            if shift:
+                pair_data['display_date'] = shift.start_date
+            else:
+                pair_data['display_date'] = punch_in_date
+        
+        # Filter pairs to include only those whose display_date is in the requested range
+        filtered_attendance = []
+        for pair_key, pair_data in punch_pairs.items():
+            display_date_str = pair_data['display_date'].strftime('%Y-%m-%d')
+            if display_date_str >= start_date and display_date_str <= end_date:
+                # Include both punch in and punch out (if exists) as a pair
+                filtered_attendance.append(pair_data['punch_in'])
+                if pair_data['punch_out']:
+                    filtered_attendance.append(pair_data['punch_out'])
+        
+        # Don't include standalone punch outs (they should always be with their punch in)
         
         attendance_records = filtered_attendance
         
@@ -807,17 +843,26 @@ def get_breaks():
                 }
             
             # Pair punch in with the next punch out
+            # Records are already filtered to show pairs together on the same day
             i = 0
             while i < len(records):
                 current = records[i]
                 if current.break_type == 'punch_in':
-                    # Look for the next punch out (could be on same day or next day)
+                    # Look for the next punch out (should be in the same filtered list)
                     punch_out = None
                     for j in range(i + 1, len(records)):
                         if records[j].break_type == 'punch_out':
-                            punch_out = records[j]
-                            i = j + 1  # Skip the punch out in next iteration
-                            break
+                            # Verify this punch out belongs to this punch in
+                            # (no other punch in between them)
+                            has_punch_in_between = False
+                            for k in range(i + 1, j):
+                                if records[k].break_type == 'punch_in':
+                                    has_punch_in_between = True
+                                    break
+                            if not has_punch_in_between:
+                                punch_out = records[j]
+                                i = j + 1  # Skip the punch out in next iteration
+                                break
                     
                     # Create combined attendance record
                     agents_data[agent_id]['attendance'].append({
@@ -841,16 +886,8 @@ def get_breaks():
                     if not punch_out:
                         i += 1  # No punch out found, move to next
                 else:
-                    # Standalone punch out (no matching punch in) - show separately
-                    agents_data[agent_id]['attendance'].append({
-                        'id': current.id,
-                        'type': 'punch_out',
-                        'name': 'Punch Out',
-                        'emoji': '🔴',
-                        'time': current.start_time.isoformat() if current.start_time else None,
-                        'screenshot': current.start_screenshot or current.end_screenshot,
-                        'notes': current.notes or ''
-                    })
+                    # Standalone punch out - this shouldn't happen with new logic
+                    # But if it does, skip it (punch out should always be with punch in)
                     i += 1
         
         return jsonify({
