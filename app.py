@@ -1213,9 +1213,10 @@ def create_manual_break():
         )
         
         # Set is_overdue based on break type
-        # punch_in/punch_out and working time breaks are never overdue
+        # punch_in/punch_out, working time breaks, and compensation are never overdue
+        # Compensation is for missed work hours, not a violation
         # Active breaks (no end time) are not overdue yet
-        if break_type in ['punch_in', 'punch_out'] or break_type in WORKING_TIME_BREAKS:
+        if break_type in ['punch_in', 'punch_out', 'compensation'] or break_type in WORKING_TIME_BREAKS:
             break_record.is_overdue = False
         elif end_datetime and duration_minutes is not None:
             break_record.is_overdue = duration_minutes > break_record.get_allowed_duration()
@@ -1879,8 +1880,9 @@ def calculate_agent_metrics(agent_id, start_date, end_date):
     exceeding_break_minutes = max(0, total_break_minutes - total_allowed_break_minutes)
     
     # Count incidents (overdue breaks) - only for regular breaks
+    # Exclude compensation from incidents (compensation is for missed work hours, not a violation)
     # Use effective overdue status (working time breaks are never overdue)
-    incidents = sum(1 for b in regular_breaks if b.get_effective_overdue_status())
+    incidents = sum(1 for b in regular_breaks if b.get_effective_overdue_status() and b.break_type != 'compensation')
     
     # Count emergency breaks
     emergency_count = sum(1 for b in breaks if b.break_type == 'emergency')
