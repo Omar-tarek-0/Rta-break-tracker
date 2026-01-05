@@ -2226,6 +2226,9 @@ def get_attendance():
     # Tolerance for "on time" (5 minutes)
     LATE_TOLERANCE_MINUTES = 5
     
+    # Track punch_outs that have already been paired with a punch_in to avoid duplicates
+    used_punch_out_ids = set()
+    
     # Iterate through each date in range
     current_date = start_date
     while current_date <= end_date:
@@ -2243,18 +2246,50 @@ def get_attendance():
                 off_date=current_date
             ).first() is not None
             
-            # Get punch records for this date
+            # Get punch records for this date - use same pairing logic as breaks cards
+            # Find punch_in on this date
             punch_in = BreakRecord.query.filter(
                 BreakRecord.agent_id == agent.id,
                 BreakRecord.break_type == 'punch_in',
                 db.func.date(BreakRecord.start_time) == current_date
             ).first()
             
-            punch_out = BreakRecord.query.filter(
-                BreakRecord.agent_id == agent.id,
-                BreakRecord.break_type == 'punch_out',
-                db.func.date(BreakRecord.start_time) == current_date
-            ).first()
+            # Find matching punch_out (could be on same day or next day for overnight shifts)
+            punch_out = None
+            if punch_in:
+                # Look for punch out within 2 days after punch in (to handle overnight shifts)
+                punch_in_time = punch_in.start_time
+                max_punch_out_time = punch_in_time + timedelta(days=2)
+                
+                punch_out = BreakRecord.query.filter(
+                    BreakRecord.agent_id == agent.id,
+                    BreakRecord.break_type == 'punch_out',
+                    BreakRecord.start_time > punch_in_time,
+                    BreakRecord.start_time <= max_punch_out_time
+                ).order_by(BreakRecord.start_time.asc()).first()
+            else:
+                # No punch_in on this date - check if there's a punch_out that belongs to a previous day's punch_in
+                # Find punch_out on this date
+                punch_out_today = BreakRecord.query.filter(
+                    BreakRecord.agent_id == agent.id,
+                    BreakRecord.break_type == 'punch_out',
+                    db.func.date(BreakRecord.start_time) == current_date
+                ).first()
+                
+                if punch_out_today:
+                    # Find the matching punch_in (should be within 2 days before)
+                    punch_out_time = punch_out_today.start_time
+                    min_punch_in_time = punch_out_time - timedelta(days=2)
+                    
+                    punch_in = BreakRecord.query.filter(
+                        BreakRecord.agent_id == agent.id,
+                        BreakRecord.break_type == 'punch_in',
+                        BreakRecord.start_time >= min_punch_in_time,
+                        BreakRecord.start_time < punch_out_time
+                    ).order_by(BreakRecord.start_time.desc()).first()
+                    
+                    if punch_in:
+                        punch_out = punch_out_today
             
             # Determine status
             status = 'not_scheduled'
@@ -2405,6 +2440,9 @@ def export_attendance():
     attendance_records = []
     LATE_TOLERANCE_MINUTES = 5
     
+    # Track punch_outs that have already been paired with a punch_in to avoid duplicates
+    used_punch_out_ids = set()
+    
     # Iterate through each date in range
     current_date = start_date
     while current_date <= end_date:
@@ -2420,17 +2458,58 @@ def export_attendance():
                 off_date=current_date
             ).first() is not None
             
+            # Get punch records for this date - use same pairing logic as breaks cards
+            # Find punch_in on this date
             punch_in = BreakRecord.query.filter(
                 BreakRecord.agent_id == agent.id,
                 BreakRecord.break_type == 'punch_in',
                 db.func.date(BreakRecord.start_time) == current_date
             ).first()
             
-            punch_out = BreakRecord.query.filter(
-                BreakRecord.agent_id == agent.id,
-                BreakRecord.break_type == 'punch_out',
-                db.func.date(BreakRecord.start_time) == current_date
-            ).first()
+            # Find matching punch_out (could be on same day or next day for overnight shifts)
+            punch_out = None
+            if punch_in:
+                # Look for punch out within 2 days after punch in (to handle overnight shifts)
+                punch_in_time = punch_in.start_time
+                max_punch_out_time = punch_in_time + timedelta(days=2)
+                
+                punch_out_query = BreakRecord.query.filter(
+                    BreakRecord.agent_id == agent.id,
+                    BreakRecord.break_type == 'punch_out',
+                    BreakRecord.start_time > punch_in_time,
+                    BreakRecord.start_time <= max_punch_out_time
+                ).order_by(BreakRecord.start_time.asc())
+                
+                # Only get punch_outs that haven't been used yet
+                for po in punch_out_query.all():
+                    if po.id not in used_punch_out_ids:
+                        punch_out = po
+                        used_punch_out_ids.add(po.id)
+                        break
+            else:
+                # No punch_in on this date - check if there's a punch_out that belongs to a previous day's punch_in
+                # Find punch_out on this date
+                punch_out_today = BreakRecord.query.filter(
+                    BreakRecord.agent_id == agent.id,
+                    BreakRecord.break_type == 'punch_out',
+                    db.func.date(BreakRecord.start_time) == current_date
+                ).first()
+                
+                if punch_out_today and punch_out_today.id not in used_punch_out_ids:
+                    # Find the matching punch_in (should be within 2 days before)
+                    punch_out_time = punch_out_today.start_time
+                    min_punch_in_time = punch_out_time - timedelta(days=2)
+                    
+                    punch_in = BreakRecord.query.filter(
+                        BreakRecord.agent_id == agent.id,
+                        BreakRecord.break_type == 'punch_in',
+                        BreakRecord.start_time >= min_punch_in_time,
+                        BreakRecord.start_time < punch_out_time
+                    ).order_by(BreakRecord.start_time.desc()).first()
+                    
+                    if punch_in:
+                        punch_out = punch_out_today
+                        used_punch_out_ids.add(punch_out_today.id)
             
             status = 'not_scheduled'
             late_minutes = 0
